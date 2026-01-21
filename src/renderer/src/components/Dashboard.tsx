@@ -26,6 +26,7 @@ export const Dashboard = (): JSX.Element => {
       const limit = pLimit(5);
 
       // 3. Запускаем задачи (forEach вместо map + tasks)
+      // Используем forEach, так как нам не нужно сохранять массив промисов (tasks)
       foundFiles.forEach(file => {
         // Просто кидаем задачу в лимит, не сохраняя результат
         limit(async () => {

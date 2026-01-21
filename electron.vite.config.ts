@@ -1,17 +1,29 @@
 import { resolve } from 'path'
-import { defineConfig } from 'electron-vite' // Убрали externalizeDepsPlugin
+import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
-    // Плагин убран, так как он deprecated и работает "из коробки"
+    // Плагин удален, он deprecated.
+    // Electron-vite теперь сам обрабатывает внешние зависимости.
+    resolve: {
+      alias: {
+        '@shared': resolve('src/shared')
+      }
+    }
   },
-  preload: {},
+  preload: {
+    resolve: {
+      alias: {
+        '@shared': resolve('src/shared')
+      }
+    }
+  },
   renderer: {
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
-        '@shared': resolve('src/shared') // Добавили алиас для shared (на будущее)
+        '@shared': resolve('src/shared')
       }
     },
     plugins: [react()]
