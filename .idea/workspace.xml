@@ -1,16 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="4ad23621-5d67-4c97-9905-f825cd5e8694" name="Changes" comment="fix css">
-      <change afterPath="$PROJECT_DIR$/SPECIFICATION.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+    <list default="true" id="4ad23621-5d67-4c97-9905-f825cd5e8694" name="Changes" comment="- fix .gitignore">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SPECIFICATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/SPECIFICATION.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/index.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/preload/index.d.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/preload/index.d.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/preload/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/preload/index.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/renderer/src/components/editor/EditorCanvas.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/renderer/src/components/editor/EditorCanvas.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -118,7 +112,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1768957254856</updated>
-      <workItem from="1768957256121" duration="5887000" />
+      <workItem from="1768957256121" duration="9530000" />
     </task>
     <task id="LOCAL-00001" summary="first commit">
       <option name="closed" value="true" />
@@ -136,7 +130,23 @@
       <option name="project" value="LOCAL" />
       <updated>1768959979110</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="- added SPECIFICATION.md">
+      <option name="closed" value="true" />
+      <created>1768963780107</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1768963780107</updated>
+    </task>
+    <task id="LOCAL-00004" summary="- fix .gitignore">
+      <option name="closed" value="true" />
+      <created>1768963867760</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1768963867760</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -145,6 +155,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="first commit" />
     <MESSAGE value="fix css" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix css" />
+    <MESSAGE value="- added SPECIFICATION.md" />
+    <MESSAGE value="- fix .gitignore" />
+    <option name="LAST_COMMIT_MESSAGE" value="- fix .gitignore" />
   </component>
 </project>
