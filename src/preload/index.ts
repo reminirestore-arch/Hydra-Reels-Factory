@@ -29,8 +29,12 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in d.ts)
-  window.electron = electronAPI
-  // @ts-ignore (define in d.ts)
-  window.api = api
+  interface PreloadWindow {
+    electron: typeof electronAPI
+    api: typeof api
+  }
+
+  const globalWindow = globalThis as unknown as PreloadWindow
+  globalWindow.electron = electronAPI
+  globalWindow.api = api
 }

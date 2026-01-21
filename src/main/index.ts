@@ -16,34 +16,47 @@ if (ffmpegPath) {
 
 // --- API HANDLERS ---
 
-// 1. Получить кадр из видео (Preview)
+// 1. Получить кадр из видео (Preview) - УЛУЧШЕННАЯ ВЕРСИЯ
 ipcMain.handle('extract-frame', async (_, filePath: string) => {
   if (!filePath) throw new Error('Путь к файлу не найден');
 
   return new Promise((resolve, reject) => {
+    // Используем уникальное имя, чтобы не было конфликтов
     const tempDir = os.tmpdir();
-    const fileName = `thumb_${Date.now()}.jpg`;
+    const fileName = `thumb_${crypto.randomUUID()}.jpg`; // Используем UUID для надежности
     const outputPath = path.join(tempDir, fileName);
 
-    ffmpeg()
-      .input(filePath)
-      .screenshots({
-        count: 1,
-        folder: tempDir,
-        filename: fileName,
-        timemarks: ['0.5'],
-      })
+    // ПРЯМОЙ МЕТОД ГЕНЕРАЦИИ (Вместо .screenshots)
+    ffmpeg(filePath)
+      .on('start', () => console.log('📸 Генерирую превью:', fileName))
+      .seekInput('1.0') // Берем кадр на 1-й секунде (надежнее, чем 0.5)
+      .frames(1)        // Всего 1 кадр
+      .output(outputPath)
       .on('end', () => {
-        try {
-          const imgBuffer = fs.readFileSync(outputPath);
-          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`;
-          fs.unlinkSync(outputPath);
-          resolve(base64);
-        } catch (e) {
-          reject(e);
-        }
+        // Небольшая задержка для файловой системы (fix race condition)
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(outputPath)) {
+              const imgBuffer = fs.readFileSync(outputPath);
+              const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`;
+              fs.unlinkSync(outputPath); // Удаляем файл
+              resolve(base64);
+            } else {
+              console.error('❌ Файл превью не создан:', outputPath);
+              resolve(''); // Возвращаем пустоту, чтобы не крашить UI
+            }
+          } catch (e) {
+            console.error('Ошибка чтения превью:', e);
+            reject(e);
+          }
+        }, 100);
       })
-      .on('error', (err) => reject(err));
+      .on('error', (err) => {
+        console.error('❌ Ошибка FFmpeg (Thumb):', err);
+        // Не реджектим, чтобы один битый файл не ломал загрузку всей папки
+        resolve('');
+      })
+      .run();
   });
 });
 
