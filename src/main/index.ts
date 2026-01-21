@@ -3,6 +3,63 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+// --- ДОБАВЛЯЕМ ЭТОТ БЛОК ---
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from 'ffmpeg-static';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
+// Указываем путь к бинарнику
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'));
+}
+
+// Обработчик: Получить кадр из видео
+ipcMain.handle('extract-frame', async (_, filePath: string) => {
+  // 1. ЗАЩИТА: Проверяем, пришел ли путь
+  if (!filePath) {
+    console.error('❌ ОШИБКА: В extract-frame пришел пустой путь к файлу!');
+    throw new Error('Путь к файлу не найден (filePath is undefined/null)');
+  }
+
+  console.log('🎬 Начинаю обработку видео:', filePath);
+
+  return new Promise((resolve, reject) => {
+    const tempDir = os.tmpdir();
+    const fileName = `thumb_${Date.now()}.jpg`;
+    const outputPath = path.join(tempDir, fileName);
+
+    // 2. ЯВНОЕ УКАЗАНИЕ ВХОДА (.input)
+    // Это лечит ошибку "reading source", если fluent-ffmpeg запутался
+    ffmpeg()
+      .input(filePath)
+      .screenshots({
+        count: 1,
+        folder: tempDir,
+        filename: fileName,
+        timemarks: ['0.5'], // Кадр на 0.5 сек
+      })
+      .on('end', () => {
+        console.log('✅ Скриншот создан:', outputPath);
+        try {
+          const imgBuffer = fs.readFileSync(outputPath);
+          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`;
+          fs.unlinkSync(outputPath); // Чистим за собой
+          resolve(base64);
+        } catch (e) {
+          console.error('Ошибка чтения скриншота:', e);
+          reject(e);
+        }
+      })
+      .on('error', (err) => {
+        console.error('❌ Ошибка FFmpeg:', err);
+        reject(err);
+      });
+  });
+});
+// --- КОНЕЦ БЛОКА ---
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
