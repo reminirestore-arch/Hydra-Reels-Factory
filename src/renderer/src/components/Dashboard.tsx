@@ -1,29 +1,15 @@
 import { useState, JSX } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  Image,
-  ScrollShadow,
-  Chip,
-  Spacer,
-  Divider
-} from "@heroui/react";
-
-// Интерфейс файла
-interface VideoFile {
-  id: string;
-  name: string;
-  path: string;
-  thumbnail?: string;
-}
+import { Button, Card, CardBody, Image, ScrollShadow, Chip, Spacer, Divider } from "@heroui/react";
+// 👇 1. Импорт типа
+import { VideoFile } from '@shared/types';
+// 👇 2. Импорт p-limit
+import pLimit from 'p-limit';
 
 export const Dashboard = (): JSX.Element => {
   const [inputPath, setInputPath] = useState<string | null>(null);
   const [files, setFiles] = useState<VideoFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
-  // Логика выбора папки
   const handleSelectFolder = async () => {
     try {
       const path = await window.api.selectFolder();
@@ -31,18 +17,33 @@ export const Dashboard = (): JSX.Element => {
 
       setInputPath(path);
       setFiles([]);
+
+      // 1. Быстро получаем список файлов
       const foundFiles = await window.api.scanFolder(path);
       setFiles(foundFiles);
 
-      // Генерация превью
-      foundFiles.forEach(async (file) => {
-        try {
-          const thumb = await window.api.extractFrame(file.path);
-          setFiles(prev => prev.map(f => f.id === file.id ? { ...f, thumbnail: thumb } : f));
-        } catch (e) {
-          console.error(e);
-        }
+      // 2. Настраиваем очередь (LIMIT = 5 потоков)
+      const limit = pLimit(5);
+
+      // 3. Запускаем задачи (forEach вместо map + tasks)
+      foundFiles.forEach(file => {
+        // Просто кидаем задачу в лимит, не сохраняя результат
+        limit(async () => {
+          try {
+            const thumb = await window.api.extractFrame(file.path);
+
+            setFiles(currentFiles =>
+              currentFiles.map(f => f.id === file.id ? { ...f, thumbnail: thumb } : f)
+            );
+          } catch (e) {
+            console.error(`Ошибка превью для ${file.name}:`, e);
+          }
+        });
       });
+
+      // Мы не ждем await Promise.all(tasks), чтобы UI не блокировался.
+      // Задачи начнут выполняться, а пользователь уже может кликать интерфейс.
+
     } catch (err) {
       console.error(err);
     }
@@ -50,10 +51,10 @@ export const Dashboard = (): JSX.Element => {
 
   const selectedFile = files.find(f => f.id === selectedFileId);
 
+  // ... (Далее весь твой JSX без изменений) ...
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden font-sans">
-
-      {/* === ЛЕВАЯ ПАНЕЛЬ (СПИСОК) === */}
+      {/* ... КОД UI ОСТАВЛЯЕМ КАК БЫЛ, ОН У ТЕБЯ ПРАВИЛЬНЫЙ ... */}
       <div className="w-80 flex flex-col border-r border-default-100 bg-background/50 backdrop-blur-xl shrink-0">
 
         {/* Хедер списка */}

@@ -1,11 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-
-// Интерфейс файла, который возвращает бэкенд
-interface VideoFile {
-  name: string;
-  path: string;
-  id: string;
-}
+// 👇 Импорт типа (обрати внимание на путь, он относителен этого файла)
+import { VideoFile } from '../shared/types'
 
 declare global {
   interface Window {

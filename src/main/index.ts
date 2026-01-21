@@ -7,60 +7,77 @@ import ffmpegPath from 'ffmpeg-static';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as crypto from 'crypto'; // Для генерации ID файлов
+import * as crypto from 'crypto';
+// 👇 Импортируем общий тип
+import { VideoFile } from '@shared/types';
 
-// Указываем путь к бинарнику FFmpeg
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'));
 }
 
+// --- УТИЛИТЫ ---
+
+/**
+ * Умное ожидание файла (Polling).
+ * Проверяет наличие файла каждые `interval` мс до истечения `timeout`.
+ */
+const waitForFile = (filePath: string, timeout = 2000, interval = 100): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+
+    const check = () => {
+      fs.access(filePath, fs.constants.F_OK, (err) => {
+        if (!err) {
+          // Файл найден! Но дадим еще крошечный буфер на завершение записи байтов
+          setTimeout(resolve, 50);
+        } else if (Date.now() - startTime > timeout) {
+          reject(new Error(`Timeout waiting for file: ${filePath}`));
+        } else {
+          setTimeout(check, interval); // Пробуем снова
+        }
+      });
+    };
+    check();
+  });
+};
+
 // --- API HANDLERS ---
 
-// 1. Получить кадр из видео (Preview) - УЛУЧШЕННАЯ ВЕРСИЯ
-ipcMain.handle('extract-frame', async (_, filePath: string) => {
+ipcMain.handle('extract-frame', async (_, filePath: string): Promise<string> => {
   if (!filePath) throw new Error('Путь к файлу не найден');
 
-  return new Promise((resolve, reject) => {
-    // Используем уникальное имя, чтобы не было конфликтов
-    const tempDir = os.tmpdir();
-    const fileName = `thumb_${crypto.randomUUID()}.jpg`; // Используем UUID для надежности
-    const outputPath = path.join(tempDir, fileName);
+  const tempDir = os.tmpdir();
+  const fileName = `thumb_${crypto.randomUUID()}.jpg`;
+  const outputPath = path.join(tempDir, fileName);
 
-    // ПРЯМОЙ МЕТОД ГЕНЕРАЦИИ (Вместо .screenshots)
+  return new Promise((resolve) => {
     ffmpeg(filePath)
-      .on('start', () => console.log('📸 Генерирую превью:', fileName))
-      .seekInput('1.0') // Берем кадр на 1-й секунде (надежнее, чем 0.5)
-      .frames(1)        // Всего 1 кадр
+      .on('start', () => console.log('📸 Start frame:', fileName))
+      .seekInput('1.0')
+      .frames(1)
       .output(outputPath)
-      .on('end', () => {
-        // Небольшая задержка для файловой системы (fix race condition)
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(outputPath)) {
-              const imgBuffer = fs.readFileSync(outputPath);
-              const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`;
-              fs.unlinkSync(outputPath); // Удаляем файл
-              resolve(base64);
-            } else {
-              console.error('❌ Файл превью не создан:', outputPath);
-              resolve(''); // Возвращаем пустоту, чтобы не крашить UI
-            }
-          } catch (e) {
-            console.error('Ошибка чтения превью:', e);
-            reject(e);
-          }
-        }, 100);
+      .on('end', async () => {
+        try {
+          // 👇 ИСПОЛЬЗУЕМ POLLING ВМЕСТО SETTIMEOUT
+          await waitForFile(outputPath);
+
+          const imgBuffer = fs.readFileSync(outputPath);
+          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`;
+          fs.unlinkSync(outputPath);
+          resolve(base64);
+        } catch (e) {
+          console.error('Ошибка чтения превью:', e);
+          resolve(''); // Возвращаем пустоту, чтобы не крашить UI
+        }
       })
       .on('error', (err) => {
-        console.error('❌ Ошибка FFmpeg (Thumb):', err);
-        // Не реджектим, чтобы один битый файл не ломал загрузку всей папки
+        console.error('FFmpeg Error:', err);
         resolve('');
       })
       .run();
   });
 });
 
-// 2. Выбор папки (System Dialog)
 ipcMain.handle('select-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openDirectory'],
@@ -70,36 +87,35 @@ ipcMain.handle('select-folder', async () => {
   return filePaths[0];
 });
 
-// 3. Сканирование папки на видеофайлы
-ipcMain.handle('scan-folder', async (_, folderPath: string) => {
+// 👇 Типизируем возвращаемое значение
+ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<VideoFile[]> => {
   if (!folderPath) return [];
 
   try {
     const files = fs.readdirSync(folderPath);
     const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi'];
 
-    const videoFiles = files.filter(file => {
-      const ext = path.extname(file).toLowerCase();
-      return videoExtensions.includes(ext) && !file.startsWith('.');
-    });
-
-    // Возвращаем список файлов для фронтенда
-    return videoFiles.map(fileName => ({
-      name: fileName,
-      path: path.join(folderPath, fileName),
-      id: crypto.randomUUID()
-    }));
+    return files
+      .filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return videoExtensions.includes(ext) && !file.startsWith('.');
+      })
+      .map(fileName => ({
+        id: crypto.randomUUID(),
+        name: fileName,
+        path: path.join(folderPath, fileName),
+        // thumbnail пока undefined
+      }));
   } catch (err) {
-    console.error('Ошибка сканирования:', err);
+    console.error('Scan Error:', err);
     return [];
   }
 });
 
-// --- WINDOW MANAGEMENT ---
-
+// ... далее код создания окна (createWindow) без изменений ...
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
-    width: 1200, // Чуть шире для дашборда
+    width: 1200,
     height: 800,
     show: false,
     autoHideMenuBar: true,
