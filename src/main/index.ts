@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import pLimit from 'p-limit'
 import {
   extractFrameAsDataUrl,
   generateThumbnail,
@@ -56,25 +57,28 @@ ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<VideoFile[]
       return videoExtensions.includes(ext) && !file.startsWith('.')
     })
 
+    const limit = pLimit(2)
     const results = await Promise.all(
-      files.map(async (fileName) => {
-        const fullPath = path.join(folderPath, fileName)
-        const [thumbnail, duration] = await Promise.all([
-          generateThumbnail(fullPath),
-          getVideoDuration(fullPath)
-        ])
+      files.map((fileName) =>
+        limit(async () => {
+          const fullPath = path.join(folderPath, fileName)
+          const [thumbnail, duration] = await Promise.all([
+            generateThumbnail(fullPath),
+            getVideoDuration(fullPath)
+          ])
 
-        return {
-          id: crypto.randomUUID(),
-          filename: fileName,
-          fullPath,
-          thumbnailPath: thumbnail?.path ?? '',
-          thumbnailDataUrl: thumbnail?.dataUrl ?? '',
-          duration,
-          overlayDuration: 5,
-          strategies: createEmptyStrategies()
-        }
-      })
+          return {
+            id: crypto.randomUUID(),
+            filename: fileName,
+            fullPath,
+            thumbnailPath: thumbnail?.path ?? '',
+            thumbnailDataUrl: thumbnail?.dataUrl ?? '',
+            duration,
+            overlayDuration: 5,
+            strategies: createEmptyStrategies()
+          }
+        })
+      )
     )
 
     return results
