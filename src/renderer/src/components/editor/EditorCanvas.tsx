@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState, JSX } from 'react'
 import * as fabric from 'fabric'
 import { Button, ScrollShadow, Slider, Label } from '@heroui/react'
-import { AlignCenter, AlignLeft, AlignRight, MonitorPlay, Save, Type, X } from 'lucide-react'
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  AlignVerticalJustifyStart,
+  MonitorPlay,
+  Save,
+  Type,
+  X
+} from 'lucide-react'
 import { buildDefaultOverlaySettings, createDefaultStrategy } from '@shared/defaults'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 
@@ -25,6 +36,14 @@ const CANVAS_WIDTH = 450
 const CANVAS_HEIGHT = 800
 
 type OverlayText = fabric.Textbox | fabric.IText
+type CanvasElementRole = 'overlay-background' | 'overlay-text' | 'frame'
+
+interface CanvasElementNode {
+  id: string
+  label: string
+  role: CanvasElementRole
+  children?: CanvasElementNode[]
+}
 
 export const EditorCanvas = ({
   filePath,
@@ -51,7 +70,7 @@ export const EditorCanvas = ({
       },
       background: {
         ...baseSettings.background,
-        radius: baseSettings.background.radius ?? 12
+        radius: baseSettings.background.radius ?? 0
       }
     }
   })
@@ -79,6 +98,8 @@ export const EditorCanvas = ({
   }, [initialState])
 
   const [textValue, setTextValue] = useState<string>(resolveInitialTextValue)
+  const [selectedRole, setSelectedRole] = useState<CanvasElementRole | null>(null)
+  const [canvasElements, setCanvasElements] = useState<CanvasElementNode[]>([])
   const overlaySettingsRef = useRef(overlaySettings)
 
   const clampRadius = (radius: number, width: number, height: number): number =>
@@ -120,6 +141,27 @@ export const EditorCanvas = ({
     ]
   )
 
+  const clampTextToBackground = useCallback((): void => {
+    if (!backgroundRef.current || !textRef.current) return
+    const backgroundBounds = backgroundRef.current.getBoundingRect(true, true)
+    const text = textRef.current
+    const textWidth = text.getScaledWidth()
+    const textHeight = text.getScaledHeight()
+    const centerX = backgroundBounds.left + backgroundBounds.width / 2
+    const centerY = backgroundBounds.top + backgroundBounds.height / 2
+    const minX = backgroundBounds.left + textWidth / 2
+    const maxX = backgroundBounds.left + backgroundBounds.width - textWidth / 2
+    const minY = backgroundBounds.top + textHeight / 2
+    const maxY = backgroundBounds.top + backgroundBounds.height - textHeight / 2
+    const nextLeft = Math.min(Math.max(text.left ?? centerX, minX), maxX)
+    const nextTop = Math.min(Math.max(text.top ?? centerY, minY), maxY)
+    text.set({
+      left: Number.isFinite(nextLeft) ? nextLeft : centerX,
+      top: Number.isFinite(nextTop) ? nextTop : centerY
+    })
+    text.setCoords()
+  }, [])
+
   const updateLinkOffsets = useCallback((): void => {
     if (!backgroundRef.current || !textRef.current) return
     const background = backgroundRef.current
@@ -138,12 +180,6 @@ export const EditorCanvas = ({
     linkRef.current.offsetX = localX / (background.scaleX ?? 1)
     linkRef.current.offsetY = localY / (background.scaleY ?? 1)
     linkRef.current.rotationOffset = (text.angle ?? 0) - (background.angle ?? 0)
-  }, [])
-
-  const isTextInsideBackground = useCallback((): boolean => {
-    if (!backgroundRef.current || !textRef.current) return false
-    const textCenter = textRef.current.getCenterPoint()
-    return backgroundRef.current.containsPoint(textCenter)
   }, [])
 
   const attachTextToBackground = useCallback((): void => {
@@ -262,8 +298,12 @@ export const EditorCanvas = ({
       backgroundRef.current.setCoords()
     }
 
+    clampTextToBackground()
+    attachTextToBackground()
     canvas.requestRenderAll()
   }, [
+    attachTextToBackground,
+    clampTextToBackground,
     overlaySettings.background.color,
     overlaySettings.background.height,
     overlaySettings.background.opacity,
@@ -312,7 +352,7 @@ export const EditorCanvas = ({
 
     if (existingBackground && existingBackground.type === 'rect') {
       backgroundRef.current = existingBackground as fabric.Rect
-      backgroundRef.current.set({ selectable: true, evented: true })
+      backgroundRef.current.set({ selectable: true, evented: true, hasControls: true })
     }
 
     if (!backgroundRef.current) {
@@ -332,7 +372,11 @@ export const EditorCanvas = ({
         opacity: overlaySettings.background.opacity,
         rx: radius,
         ry: radius,
-        selectable: true
+        selectable: true,
+        hasControls: true,
+        lockRotation: false,
+        lockScalingX: false,
+        lockScalingY: false
       })
       rect.set({ data: { role: 'overlay-background' } })
       backgroundRef.current = rect
@@ -351,17 +395,35 @@ export const EditorCanvas = ({
       canvas.bringObjectToFront(textRef.current)
     }
 
-    if (isTextInsideBackground()) {
-      attachTextToBackground()
-    }
+    attachTextToBackground()
     applyOverlaySettings()
     canvas.requestRenderAll()
+
+    const elements: CanvasElementNode[] = [
+      { id: 'frame', label: 'Кадр видео', role: 'frame' }
+    ]
+    if (backgroundRef.current) {
+      elements.push({
+        id: 'overlay-background',
+        label: 'Подложка',
+        role: 'overlay-background',
+        children: textRef.current
+          ? [
+              {
+                id: 'overlay-text',
+                label: 'Текст',
+                role: 'overlay-text'
+              }
+            ]
+          : []
+      })
+    }
+    setCanvasElements(elements)
   }, [
     applyOverlaySettings,
     attachTextToBackground,
     buildTextObject,
     configureTextControls,
-    isTextInsideBackground,
     overlaySettings.background.color,
     overlaySettings.background.height,
     overlaySettings.background.opacity,
@@ -403,11 +465,8 @@ export const EditorCanvas = ({
       }
 
       if (target === textRef.current && backgroundRef.current) {
-        if (isTextInsideBackground()) {
-          attachTextToBackground()
-        } else {
-          linkRef.current.attached = false
-        }
+        clampTextToBackground()
+        attachTextToBackground()
       }
 
       canvas.requestRenderAll()
@@ -415,6 +474,8 @@ export const EditorCanvas = ({
 
     const handleTextChanged = (): void => {
       updateTextValueFromCanvas()
+      clampTextToBackground()
+      attachTextToBackground()
     }
 
     const handleObjectScaling = (event: fabric.IEvent<MouseEvent>): void => {
@@ -433,6 +494,7 @@ export const EditorCanvas = ({
         const uniformScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
         text.set({ scaleX: uniformScale, scaleY: uniformScale })
         text.setCoords()
+        clampTextToBackground()
       }
     }
 
@@ -463,11 +525,8 @@ export const EditorCanvas = ({
           ...prev,
           text: { ...prev.text, fontSize: nextFontSize }
         }))
-        if (isTextInsideBackground()) {
-          attachTextToBackground()
-        } else {
-          linkRef.current.attached = false
-        }
+        clampTextToBackground()
+        attachTextToBackground()
       }
 
       if (target === backgroundRef.current && backgroundRef.current) {
@@ -499,7 +558,18 @@ export const EditorCanvas = ({
           updateLinkOffsets()
           syncTextWithBackground()
         }
+        clampTextToBackground()
+        attachTextToBackground()
       }
+    }
+
+    const handleSelection = (): void => {
+      const active = canvas.getActiveObject()
+      const role = (active as { data?: { role?: CanvasElementRole } })?.data?.role ?? null
+      setSelectedRole(role)
+    }
+    const handleSelectionCleared = (): void => {
+      setSelectedRole(null)
     }
 
     canvas.on('object:moving', handleObjectMoving)
@@ -507,6 +577,9 @@ export const EditorCanvas = ({
     canvas.on('object:rotating', handleObjectRotating)
     canvas.on('object:modified', handleObjectModified)
     canvas.on('text:changed', handleTextChanged)
+    canvas.on('selection:created', handleSelection)
+    canvas.on('selection:updated', handleSelection)
+    canvas.on('selection:cleared', handleSelectionCleared)
 
     return () => {
       canvas.off('object:moving', handleObjectMoving)
@@ -514,136 +587,55 @@ export const EditorCanvas = ({
       canvas.off('object:rotating', handleObjectRotating)
       canvas.off('object:modified', handleObjectModified)
       canvas.off('text:changed', handleTextChanged)
+      canvas.off('selection:created', handleSelection)
+      canvas.off('selection:updated', handleSelection)
+      canvas.off('selection:cleared', handleSelectionCleared)
     }
   }, [
     attachTextToBackground,
-    isTextInsideBackground,
+    clampTextToBackground,
     syncTextWithBackground,
     updateLinkOffsets,
     updateTextValueFromCanvas
   ])
 
-  useEffect(() => {
-    const canvas = fabricRef.current
-    if (!canvas) return
+  const alignTextInsideBackground = (horizontal: 'left' | 'center' | 'right'): void => {
+    if (!backgroundRef.current || !textRef.current) return
+    const background = backgroundRef.current
+    const text = textRef.current
+    const backgroundWidth = (background.width ?? 0) * (background.scaleX ?? 1)
+    const textWidth = text.getScaledWidth()
+    const halfSpace = Math.max(0, (backgroundWidth - textWidth) / 2)
+    const centerX = background.left ?? CANVAS_WIDTH / 2
+    const offset =
+      horizontal === 'left' ? -halfSpace : horizontal === 'right' ? halfSpace : 0
+    text.set({
+      left: centerX + offset,
+      originX: 'center',
+      textAlign: horizontal
+    })
+    clampTextToBackground()
+    attachTextToBackground()
+    fabricRef.current?.requestRenderAll()
+  }
 
-    const handleObjectMoving = (event: fabric.IEvent<MouseEvent>): void => {
-      const target = event.target
-      if (!target) return
-
-      if (target === backgroundRef.current) {
-        syncTextWithBackground()
-      }
-
-      if (target === textRef.current && backgroundRef.current) {
-        if (isTextInsideBackground()) {
-          attachTextToBackground()
-        } else {
-          linkRef.current.attached = false
-        }
-      }
-
-      canvas.requestRenderAll()
-    }
-
-    const handleTextChanged = (): void => {
-      updateTextValueFromCanvas()
-    }
-
-    const handleObjectScaling = (event: fabric.IEvent<MouseEvent>): void => {
-      const target = event.target
-      if (!target) return
-
-      if (target === backgroundRef.current) {
-        syncTextWithBackground()
-      }
-
-      if (target === textRef.current) {
-        const text = textRef.current
-        if (!text) return
-        const scaleX = text.scaleX ?? 1
-        const scaleY = text.scaleY ?? 1
-        const uniformScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
-        text.set({ scaleX: uniformScale, scaleY: uniformScale })
-      }
-    }
-
-    const handleObjectRotating = (event: fabric.IEvent<MouseEvent>): void => {
-      const target = event.target
-      if (!target) return
-      if (target === backgroundRef.current) {
-        syncTextWithBackground()
-      }
-    }
-
-    const handleObjectModified = (event: fabric.IEvent<MouseEvent>): void => {
-      const target = event.target
-      if (!target) return
-
-      if (target === textRef.current && textRef.current) {
-        const text = textRef.current
-        const scale = ((text.scaleX ?? 1) + (text.scaleY ?? 1)) / 2
-        const currentFontSize = text.fontSize ?? overlaySettingsRef.current.text.fontSize
-        const nextFontSize = Math.max(1, Math.round(currentFontSize * scale))
-        text.set({
-          fontSize: nextFontSize,
-          scaleX: 1,
-          scaleY: 1
-        })
-        text.setCoords()
-        setOverlaySettings((prev) => ({
-          ...prev,
-          text: { ...prev.text, fontSize: nextFontSize }
-        }))
-        if (isTextInsideBackground()) {
-          attachTextToBackground()
-        } else {
-          linkRef.current.attached = false
-        }
-      }
-
-      if (target === backgroundRef.current && backgroundRef.current) {
-        const background = backgroundRef.current
-        const nextWidth = Math.max(20, (background.width ?? 0) * (background.scaleX ?? 1))
-        const nextHeight = Math.max(20, (background.height ?? 0) * (background.scaleY ?? 1))
-        background.set({
-          width: nextWidth,
-          height: nextHeight,
-          scaleX: 1,
-          scaleY: 1
-        })
-        const radius = clampRadius(overlaySettingsRef.current.background.radius ?? 0, nextWidth, nextHeight)
-        background.set({ rx: radius, ry: radius })
-        background.setCoords()
-        setOverlaySettings((prev) => ({
-          ...prev,
-          background: {
-            ...prev.background,
-            width: nextWidth,
-            height: nextHeight
-          }
-        }))
-        if (linkRef.current.attached) {
-          updateLinkOffsets()
-          syncTextWithBackground()
-        }
-      }
-    }
-
-    canvas.on('object:moving', handleObjectMoving)
-    canvas.on('object:scaling', handleObjectScaling)
-    canvas.on('object:rotating', handleObjectRotating)
-    canvas.on('object:modified', handleObjectModified)
-    canvas.on('text:changed', handleTextChanged)
-
-    return () => {
-      canvas.off('object:moving', handleObjectMoving)
-      canvas.off('object:scaling', handleObjectScaling)
-      canvas.off('object:rotating', handleObjectRotating)
-      canvas.off('object:modified', handleObjectModified)
-      canvas.off('text:changed', handleTextChanged)
-    }
-  }, [])
+  const alignTextVertically = (vertical: 'top' | 'center' | 'bottom'): void => {
+    if (!backgroundRef.current || !textRef.current) return
+    const background = backgroundRef.current
+    const text = textRef.current
+    const backgroundHeight = (background.height ?? 0) * (background.scaleY ?? 1)
+    const textHeight = text.getScaledHeight()
+    const halfSpace = Math.max(0, (backgroundHeight - textHeight) / 2)
+    const centerY = background.top ?? CANVAS_HEIGHT / 2
+    const offset = vertical === 'top' ? -halfSpace : vertical === 'bottom' ? halfSpace : 0
+    text.set({
+      top: centerY + offset,
+      originY: 'center'
+    })
+    clampTextToBackground()
+    attachTextToBackground()
+    fabricRef.current?.requestRenderAll()
+  }
 
   const handleCenterText = (): void => {
     if (!backgroundRef.current || !textRef.current) return
@@ -795,6 +787,71 @@ export const EditorCanvas = ({
       </div>
 
       <div className="flex flex-1 min-h-0">
+        <aside className="w-60 border-r border-white/10 bg-black/60">
+          <ScrollShadow className="h-full p-4 space-y-4">
+            <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
+              Элементы канвы
+            </div>
+            <div className="space-y-2 text-sm text-default-300">
+              {canvasElements.map((element) => (
+                <div key={element.id} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (element.role === 'frame') {
+                        fabricRef.current?.discardActiveObject()
+                        fabricRef.current?.requestRenderAll()
+                        return
+                      }
+                      const target =
+                        element.role === 'overlay-background'
+                          ? backgroundRef.current
+                          : textRef.current
+                      if (target) {
+                        fabricRef.current?.setActiveObject(target)
+                        fabricRef.current?.requestRenderAll()
+                      }
+                    }}
+                    className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm transition ${
+                      selectedRole === element.role
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-white/5 hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{element.label}</span>
+                    {element.children && element.children.length > 0 ? (
+                      <span className="text-xs text-default-500">Группа</span>
+                    ) : null}
+                  </button>
+                  {element.children && element.children.length > 0 ? (
+                    <div className="ml-4 space-y-2">
+                      {element.children.map((child) => (
+                        <button
+                          key={child.id}
+                          type="button"
+                          onClick={() => {
+                            if (child.role === 'overlay-text' && textRef.current) {
+                              fabricRef.current?.setActiveObject(textRef.current)
+                              fabricRef.current?.requestRenderAll()
+                            }
+                          }}
+                          className={`flex w-full items-center rounded px-3 py-2 text-left text-sm transition ${
+                            selectedRole === child.role
+                              ? 'bg-primary/15 text-primary'
+                              : 'bg-white/5 hover:bg-white/10'
+                          }`}
+                        >
+                          {child.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </ScrollShadow>
+        </aside>
+
         <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-gray-900 to-black">
           <div className="relative shadow-2xl shadow-black ring-1 ring-white/10">
             <canvas ref={canvasRef} />
@@ -871,6 +928,8 @@ export const EditorCanvas = ({
                     setTextValue(nextValue)
                     if (textRef.current) {
                       textRef.current.set({ text: nextValue })
+                      clampTextToBackground()
+                      attachTextToBackground()
                       fabricRef.current?.requestRenderAll()
                     }
                   }}
@@ -921,12 +980,13 @@ export const EditorCanvas = ({
                   <Button
                     size="sm"
                     variant={overlaySettings.text.align === 'left' ? 'solid' : 'flat'}
-                    onPress={() =>
+                    onPress={() => {
                       setOverlaySettings((prev) => ({
                         ...prev,
                         text: { ...prev.text, align: 'left' }
                       }))
-                    }
+                      alignTextInsideBackground('left')
+                    }}
                     className="min-w-9"
                   >
                     <AlignLeft size={14} />
@@ -934,12 +994,13 @@ export const EditorCanvas = ({
                   <Button
                     size="sm"
                     variant={overlaySettings.text.align === 'center' ? 'solid' : 'flat'}
-                    onPress={() =>
+                    onPress={() => {
                       setOverlaySettings((prev) => ({
                         ...prev,
                         text: { ...prev.text, align: 'center' }
                       }))
-                    }
+                      alignTextInsideBackground('center')
+                    }}
                     className="min-w-9"
                   >
                     <AlignCenter size={14} />
@@ -947,15 +1008,31 @@ export const EditorCanvas = ({
                   <Button
                     size="sm"
                     variant={overlaySettings.text.align === 'right' ? 'solid' : 'flat'}
-                    onPress={() =>
+                    onPress={() => {
                       setOverlaySettings((prev) => ({
                         ...prev,
                         text: { ...prev.text, align: 'right' }
                       }))
-                    }
+                      alignTextInsideBackground('right')
+                    }}
                     className="min-w-9"
                   >
                     <AlignRight size={14} />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-default-600">
+                <span className="font-medium">Вертикаль</span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="flat" onPress={() => alignTextVertically('top')}>
+                    <AlignVerticalJustifyStart size={14} />
+                  </Button>
+                  <Button size="sm" variant="flat" onPress={() => alignTextVertically('center')}>
+                    <AlignVerticalJustifyCenter size={14} />
+                  </Button>
+                  <Button size="sm" variant="flat" onPress={() => alignTextVertically('bottom')}>
+                    <AlignVerticalJustifyEnd size={14} />
                   </Button>
                 </div>
               </div>
