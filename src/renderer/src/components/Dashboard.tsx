@@ -1,11 +1,11 @@
-import { useMemo, useState, JSX } from 'react'
+import { useMemo, useRef, useState, JSX } from 'react'
 import { Button, Card, ScrollShadow, Chip, Avatar } from '@heroui/react'
-import { StrategyType, VideoFile } from '@shared/types'
+import { OverlaySettings, StrategyProfileSettings, StrategyType, VideoFile } from '@shared/types'
 import { EditorPanel } from './editor/EditorPanel'
 import { EditorModal } from './editor/EditorModal'
 
-const getReadyCount = (file: VideoFile): number => {
-  return Object.values(file.strategies).filter((strategy) => strategy.isReady).length
+const getCustomCount = (file: VideoFile): number => {
+  return Object.values(file.strategies).filter((strategy) => strategy.status === 'custom').length
 }
 
 const getOutputName = (filename: string, strategy: StrategyType): string => {
@@ -21,10 +21,14 @@ export const Dashboard = (): JSX.Element => {
   const [outputPath, setOutputPath] = useState('')
   const [activeStrategy, setActiveStrategy] = useState<StrategyType | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState({ completed: 0, total: 0 })
+  const [stopRequested, setStopRequested] = useState(false)
+  const stopRequestedRef = useRef(false)
 
   const selectedFile = useMemo(() => files.find((f) => f.id === selectedFileId) ?? null, [files, selectedFileId])
 
   const handleSelectFolder = async () => {
+    if (isProcessing) return
     try {
       const folderPath = await window.api.selectFolder()
       if (!folderPath) return
@@ -42,6 +46,7 @@ export const Dashboard = (): JSX.Element => {
   }
 
   const handleSelectOutputFolder = async () => {
+    if (isProcessing) return
     try {
       const folderPath = await window.api.selectOutputFolder()
       if (!folderPath) return
@@ -52,14 +57,22 @@ export const Dashboard = (): JSX.Element => {
   }
 
   const handleFileSelect = (file: VideoFile) => {
+    if (isProcessing) return
     setSelectedFileId(file.id)
   }
 
   const handleOpenEditor = (strategy: StrategyType) => {
+    if (isProcessing) return
     setActiveStrategy(strategy)
   }
 
-  const handleSaveOverlay = async (payload: { canvasState: object; overlayDataUrl: string; textData: string }) => {
+  const handleSaveOverlay = async (payload: {
+    canvasState: object
+    overlayDataUrl: string
+    textData: string
+    overlaySettings: OverlaySettings
+    profileSettings: StrategyProfileSettings
+  }) => {
     if (!selectedFile || !activeStrategy) return
 
     const overlayPath = await window.api.saveOverlay(payload.overlayDataUrl)
@@ -73,10 +86,12 @@ export const Dashboard = (): JSX.Element => {
                 ...file.strategies,
                 [activeStrategy]: {
                   ...file.strategies[activeStrategy],
-                  isReady: true,
+                  status: 'custom',
                   overlayPath,
                   canvasState: payload.canvasState,
-                  textData: payload.textData
+                  textData: payload.textData,
+                  overlaySettings: payload.overlaySettings,
+                  profileSettings: payload.profileSettings
                 }
               }
             }
@@ -87,37 +102,65 @@ export const Dashboard = (): JSX.Element => {
     setActiveStrategy(null)
   }
 
-  const handleUpdateDuration = (duration: number) => {
-    if (!selectedFile) return
-    setFiles((prev) =>
-      prev.map((file) => (file.id === selectedFile.id ? { ...file, overlayDuration: duration } : file))
-    )
-  }
-
-  const handleApplySettings = (settings: unknown) => {
-    console.log('Exporting settings:', settings)
-  }
-
   const handleStartProcessing = async () => {
     if (!outputPath || !inputPath) return
     if (isProcessing) return
 
+    stopRequestedRef.current = false
+    setStopRequested(false)
     setIsProcessing(true)
+    const totalJobs = files.length * 4
+    setProcessingProgress({ completed: 0, total: totalJobs })
+    let completed = 0
+
     for (const file of files) {
+      if (stopRequestedRef.current) break
+
+      setFiles((prev) =>
+        prev.map((item) =>
+          item.id === file.id ? { ...item, processingStatus: 'processing' } : item
+        )
+      )
+
       for (const strategy of Object.values(file.strategies)) {
-        if (!strategy.isReady || !strategy.overlayPath) continue
+        if (stopRequestedRef.current) break
 
         await window.api.renderStrategy({
           inputPath: file.fullPath,
           outputDir: outputPath,
           outputName: getOutputName(file.filename, strategy.id),
           overlayPath: strategy.overlayPath,
-          overlayDuration: file.overlayDuration,
+          overlayStart: strategy.overlaySettings.timing.startTime,
+          overlayDuration: strategy.overlaySettings.timing.duration,
           strategyId: strategy.id
         })
+
+        completed += 1
+        setProcessingProgress({ completed, total: totalJobs })
+      }
+
+      if (!stopRequestedRef.current) {
+        setFiles((prev) =>
+          prev.map((item) => (item.id === file.id ? { ...item, processingStatus: 'done' } : item))
+        )
+      } else {
+        setFiles((prev) =>
+          prev.map((item) =>
+            item.id === file.id ? { ...item, processingStatus: 'idle' } : item
+          )
+        )
+        break
       }
     }
+
     setIsProcessing(false)
+    setStopRequested(false)
+    stopRequestedRef.current = false
+  }
+
+  const handleStopProcessing = () => {
+    stopRequestedRef.current = true
+    setStopRequested(true)
   }
 
   return (
@@ -129,10 +172,17 @@ export const Dashboard = (): JSX.Element => {
             onClick={handleSelectFolder}
             className="font-bold cursor-pointer"
             variant={'outline'}
+            isDisabled={isProcessing}
           >
             {isLoading ? 'Сканирование...' : 'Выбрать входную папку'}
           </Button>
-          <Button fullWidth onClick={handleSelectOutputFolder} className="font-bold" variant={'outline'}>
+          <Button
+            fullWidth
+            onClick={handleSelectOutputFolder}
+            className="font-bold"
+            variant={'outline'}
+            isDisabled={isProcessing}
+          >
             {outputPath ? 'Изменить папку вывода' : 'Выбрать папку вывода'}
           </Button>
           <div className="text-xs text-default-500">
@@ -143,9 +193,15 @@ export const Dashboard = (): JSX.Element => {
           </div>
         </div>
 
-        <ScrollShadow className="flex-1 p-4 space-y-3">
+        <ScrollShadow className={`flex-1 p-4 space-y-3 ${isProcessing ? 'opacity-60 pointer-events-none' : ''}`}>
           {files.map((file) => {
-            const readyCount = getReadyCount(file)
+            const customCount = getCustomCount(file)
+            const processingLabel =
+              file.processingStatus === 'done'
+                ? 'Обработан'
+                : file.processingStatus === 'processing'
+                  ? 'В процессе'
+                  : 'Не обработан'
             return (
               <Card
                 key={file.id}
@@ -170,9 +226,18 @@ export const Dashboard = (): JSX.Element => {
 
                   <div className="flex-1 min-w-0 text-left">
                     <div className="text-sm font-bold truncate text-white">{file.filename}</div>
-                    <Chip size="sm" className="mt-1 h-5 text-[10px]">
-                      READY {readyCount}/4
-                    </Chip>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <Chip size="sm" className="h-5 text-[10px]">
+                        КАСТОМ {customCount}/4
+                      </Chip>
+                      <Chip
+                        size="sm"
+                        className="h-5 text-[10px]"
+                        color={file.processingStatus === 'done' ? 'success' : 'default'}
+                      >
+                        {processingLabel}
+                      </Chip>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -187,25 +252,34 @@ export const Dashboard = (): JSX.Element => {
         </ScrollShadow>
 
         <div className="p-4 border-t border-white/10">
-          <Button
-            fullWidth
-            size="lg"
-            className="font-bold bg-primary text-black"
-            isDisabled={!outputPath || files.length === 0 || isProcessing}
-            onPress={handleStartProcessing}
-          >
-            {isProcessing ? 'Обработка...' : 'ЗАПУСТИТЬ ОБРАБОТКУ'}
-          </Button>
+          <div className="space-y-3">
+            <Button
+              fullWidth
+              size="lg"
+              className={`font-bold ${isProcessing ? 'bg-warning text-black' : 'bg-primary text-black'}`}
+              isDisabled={!outputPath || files.length === 0}
+              onPress={isProcessing ? handleStopProcessing : handleStartProcessing}
+            >
+              {isProcessing ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ'}
+            </Button>
+            {isProcessing && (
+              <div className="text-xs text-default-400 text-center">
+                Обработка: {processingProgress.completed}/{processingProgress.total}
+                {stopRequested && ' • Остановка...'}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 relative flex flex-col bg-black/90">
+      <div
+        className={`flex-1 relative flex flex-col bg-black/90 ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
+      >
         {selectedFile ? (
           <EditorPanel
             file={selectedFile}
             onOpenEditor={handleOpenEditor}
-            onUpdateDuration={handleUpdateDuration}
-            onApplySettings={handleApplySettings}
+            isProcessing={isProcessing}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-default-500">
