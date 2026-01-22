@@ -46,7 +46,7 @@ export const EditorCanvas = ({
   const fabricRef = useRef<fabric.Canvas | null>(null)
   const textRef = useRef<fabric.IText | null>(null)
   const backgroundRef = useRef<fabric.Rect | null>(null)
-  const linkRef = useRef({ attached: false, offsetX: 0, offsetY: 0 })
+  const linkRef = useRef({ attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 })
 
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() => {
     const baseSettings = initialOverlaySettings ?? buildDefaultOverlaySettings()
@@ -66,26 +66,14 @@ export const EditorCanvas = ({
     initialProfileSettings ?? createDefaultStrategy(strategyId).profileSettings
   )
   const [textValue, setTextValue] = useState<string>('Текст Рилса')
+  const overlaySettingsRef = useRef(overlaySettings)
 
   const clampRadius = (radius: number, width: number, height: number): number =>
     Math.max(0, Math.min(radius, Math.min(width, height) / 2))
 
   const configureTextControls = (text: fabric.IText): void => {
     text.set({
-      lockScalingX: true,
-      lockScalingY: true,
       lockUniScaling: true
-    })
-    text.setControlsVisibility({
-      mt: false,
-      mb: false,
-      ml: false,
-      mr: false,
-      tl: false,
-      tr: false,
-      bl: false,
-      br: false,
-      mtr: false
     })
   }
 
@@ -96,8 +84,20 @@ export const EditorCanvas = ({
 
   const updateLinkOffsets = (): void => {
     if (!backgroundRef.current || !textRef.current) return
-    linkRef.current.offsetX = (textRef.current.left ?? 0) - (backgroundRef.current.left ?? 0)
-    linkRef.current.offsetY = (textRef.current.top ?? 0) - (backgroundRef.current.top ?? 0)
+    const background = backgroundRef.current
+    const text = textRef.current
+    const backgroundCenter = background.getCenterPoint()
+    const textCenter = text.getCenterPoint()
+    const angle = fabric.util.degreesToRadians(background.angle ?? 0)
+    const dx = textCenter.x - backgroundCenter.x
+    const dy = textCenter.y - backgroundCenter.y
+    const cos = Math.cos(-angle)
+    const sin = Math.sin(-angle)
+    const localX = dx * cos - dy * sin
+    const localY = dx * sin + dy * cos
+    linkRef.current.offsetX = localX / (background.scaleX ?? 1)
+    linkRef.current.offsetY = localY / (background.scaleY ?? 1)
+    linkRef.current.rotationOffset = (text.angle ?? 0) - (background.angle ?? 0)
   }
 
   const isTextInsideBackground = (): boolean => {
@@ -110,6 +110,33 @@ export const EditorCanvas = ({
     linkRef.current.attached = true
     updateLinkOffsets()
   }
+
+  const syncTextWithBackground = (): void => {
+    if (!backgroundRef.current || !textRef.current || !linkRef.current.attached) return
+    const background = backgroundRef.current
+    const text = textRef.current
+    const backgroundCenter = background.getCenterPoint()
+    const angle = fabric.util.degreesToRadians(background.angle ?? 0)
+    const scaledX = linkRef.current.offsetX * (background.scaleX ?? 1)
+    const scaledY = linkRef.current.offsetY * (background.scaleY ?? 1)
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    const rotatedX = scaledX * cos - scaledY * sin
+    const rotatedY = scaledX * sin + scaledY * cos
+    const targetCenter = new fabric.Point(backgroundCenter.x + rotatedX, backgroundCenter.y + rotatedY)
+    text.set({
+      left: targetCenter.x,
+      top: targetCenter.y,
+      angle: (background.angle ?? 0) + linkRef.current.rotationOffset,
+      originX: 'center',
+      originY: 'center'
+    })
+    text.setCoords()
+  }
+
+  useEffect(() => {
+    overlaySettingsRef.current = overlaySettings
+  }, [overlaySettings])
 
   useEffect(() => {
     if (!canvasRef.current || fabricRef.current) return
@@ -176,10 +203,12 @@ export const EditorCanvas = ({
     if (existingText && existingText.type === 'i-text') {
       textRef.current = existingText as fabric.IText
       configureTextControls(textRef.current)
+      textRef.current.set({ selectable: true, evented: true })
     }
 
     if (existingBackground && existingBackground.type === 'rect') {
       backgroundRef.current = existingBackground as fabric.Rect
+      backgroundRef.current.set({ selectable: true, evented: true })
     }
 
     if (!backgroundRef.current) {
@@ -296,12 +325,8 @@ export const EditorCanvas = ({
       const target = event.target
       if (!target) return
 
-      if (target === backgroundRef.current && linkRef.current.attached && textRef.current) {
-        textRef.current.set({
-          left: (backgroundRef.current.left ?? 0) + linkRef.current.offsetX,
-          top: (backgroundRef.current.top ?? 0) + linkRef.current.offsetY
-        })
-        textRef.current.setCoords()
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
       }
 
       if (target === textRef.current && backgroundRef.current) {
@@ -319,11 +344,97 @@ export const EditorCanvas = ({
       updateTextValueFromCanvas()
     }
 
+    const handleObjectScaling = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+
+      if (target === textRef.current) {
+        const text = textRef.current
+        if (!text) return
+        const scaleX = text.scaleX ?? 1
+        const scaleY = text.scaleY ?? 1
+        const uniformScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
+        text.set({ scaleX: uniformScale, scaleY: uniformScale })
+      }
+    }
+
+    const handleObjectRotating = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+    }
+
+    const handleObjectModified = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === textRef.current && textRef.current) {
+        const text = textRef.current
+        const scale = ((text.scaleX ?? 1) + (text.scaleY ?? 1)) / 2
+        const currentFontSize = text.fontSize ?? overlaySettingsRef.current.text.fontSize
+        const nextFontSize = Math.max(1, Math.round(currentFontSize * scale))
+        text.set({
+          fontSize: nextFontSize,
+          scaleX: 1,
+          scaleY: 1
+        })
+        text.setCoords()
+        setOverlaySettings((prev) => ({
+          ...prev,
+          text: { ...prev.text, fontSize: nextFontSize }
+        }))
+        if (isTextInsideBackground()) {
+          attachTextToBackground()
+        } else {
+          linkRef.current.attached = false
+        }
+      }
+
+      if (target === backgroundRef.current && backgroundRef.current) {
+        const background = backgroundRef.current
+        const nextWidth = Math.max(20, (background.width ?? 0) * (background.scaleX ?? 1))
+        const nextHeight = Math.max(20, (background.height ?? 0) * (background.scaleY ?? 1))
+        background.set({
+          width: nextWidth,
+          height: nextHeight,
+          scaleX: 1,
+          scaleY: 1
+        })
+        const radius = clampRadius(overlaySettingsRef.current.background.radius ?? 0, nextWidth, nextHeight)
+        background.set({ rx: radius, ry: radius })
+        background.setCoords()
+        setOverlaySettings((prev) => ({
+          ...prev,
+          background: {
+            ...prev.background,
+            width: nextWidth,
+            height: nextHeight
+          }
+        }))
+        if (linkRef.current.attached) {
+          updateLinkOffsets()
+          syncTextWithBackground()
+        }
+      }
+    }
+
     canvas.on('object:moving', handleObjectMoving)
+    canvas.on('object:scaling', handleObjectScaling)
+    canvas.on('object:rotating', handleObjectRotating)
+    canvas.on('object:modified', handleObjectModified)
     canvas.on('text:changed', handleTextChanged)
 
     return () => {
       canvas.off('object:moving', handleObjectMoving)
+      canvas.off('object:scaling', handleObjectScaling)
+      canvas.off('object:rotating', handleObjectRotating)
+      canvas.off('object:modified', handleObjectModified)
       canvas.off('text:changed', handleTextChanged)
     }
   }, [])
@@ -333,9 +444,11 @@ export const EditorCanvas = ({
     textRef.current.set({
       left: backgroundRef.current.left,
       top: backgroundRef.current.top,
+      angle: backgroundRef.current.angle ?? 0,
       originX: 'center',
       originY: 'center'
     })
+    linkRef.current.rotationOffset = 0
     attachTextToBackground()
     fabricRef.current?.requestRenderAll()
   }
@@ -347,12 +460,7 @@ export const EditorCanvas = ({
       originX: 'center'
     })
     backgroundRef.current.setCoords()
-    if (linkRef.current.attached && textRef.current) {
-      textRef.current.set({
-        left: (backgroundRef.current.left ?? 0) + linkRef.current.offsetX
-      })
-      textRef.current.setCoords()
-    }
+    syncTextWithBackground()
     fabricRef.current?.requestRenderAll()
   }
 
@@ -363,12 +471,7 @@ export const EditorCanvas = ({
       originY: 'center'
     })
     backgroundRef.current.setCoords()
-    if (linkRef.current.attached && textRef.current) {
-      textRef.current.set({
-        top: (backgroundRef.current.top ?? 0) + linkRef.current.offsetY
-      })
-      textRef.current.setCoords()
-    }
+    syncTextWithBackground()
     fabricRef.current?.requestRenderAll()
   }
 
@@ -387,7 +490,8 @@ export const EditorCanvas = ({
     canvas.backgroundImage = null
     canvas.requestRenderAll()
 
-    const overlayDataUrl = canvas.toDataURL({ format: 'png' })
+    const exportScale = 1080 / CANVAS_WIDTH
+    const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
     const canvasState = canvas.toJSON(['data'])
 
     canvas.backgroundImage = background
