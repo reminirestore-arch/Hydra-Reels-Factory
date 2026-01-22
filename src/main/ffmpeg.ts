@@ -64,6 +64,18 @@ export const getVideoDuration = (filePath: string): Promise<number> => {
   })
 }
 
+const hasAudioStream = (filePath: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, data) => {
+      if (err || !data.streams) {
+        resolve(false)
+        return
+      }
+      resolve(data.streams.some((stream) => stream.codec_type === 'audio'))
+    })
+  })
+}
+
 export const extractFrameAsDataUrl = async (filePath: string): Promise<string> => {
   const outputPath = createTempPath('frame', 'jpg')
 
@@ -167,12 +179,12 @@ export const renderStrategyVideo = async (options: {
   strategyId: 'IG1' | 'IG2' | 'IG3' | 'IG4'
 }): Promise<void> => {
   const { inputPath, outputPath, overlayPath, overlayDuration = 5, strategyId } = options
+  const includeAudio = await hasAudioStream(inputPath)
 
-  const runWithCodec = (codec: string): Promise<void> => {
+  const runWithCodec = (codec: string, audioFilter: string): Promise<void> => {
     return new Promise((resolve, reject) => {
       const command = ffmpeg(inputPath)
       const videoFilter = buildStrategyFilter(strategyId)
-      const audioFilter = buildAudioFilter(strategyId)
 
       const filterChain: string[] = [videoFilter]
 
@@ -183,21 +195,29 @@ export const renderStrategyVideo = async (options: {
         )
       }
 
+      command.videoFilters(filterChain.join(','))
+
+      if (includeAudio && audioFilter) {
+        command.audioFilters(audioFilter)
+      }
+
+      const outputOptions = [
+        '-map_metadata',
+        '-1',
+        '-b:v',
+        '12M',
+        '-c:v',
+        codec
+      ]
+
+      if (includeAudio) {
+        outputOptions.push('-b:a', '256k', '-c:a', 'aac')
+      } else {
+        outputOptions.push('-an')
+      }
+
       command
-        .videoFilters(filterChain.join(','))
-        .audioFilters(audioFilter)
-        .outputOptions([
-          '-map_metadata',
-          '-1',
-          '-b:v',
-          '12M',
-          '-b:a',
-          '256k',
-          '-c:v',
-          codec,
-          '-c:a',
-          'aac'
-        ])
+        .outputOptions(outputOptions)
         .on('error', (err) => reject(err))
         .on('end', () => resolve())
         .save(outputPath)
@@ -205,10 +225,42 @@ export const renderStrategyVideo = async (options: {
   }
 
   try {
-    await runWithCodec('h264_videotoolbox')
+    const audioFilter = includeAudio ? buildAudioFilter(strategyId) : ''
+    try {
+      await runWithCodec('h264_videotoolbox', audioFilter)
+    } catch (error) {
+      const message = String(error)
+      if (
+        includeAudio &&
+        audioFilter &&
+        (message.includes('No such filter') ||
+          message.includes('Error while filtering') ||
+          message.includes('matches no streams'))
+      ) {
+        await runWithCodec('h264_videotoolbox', '')
+        return
+      }
+      throw error
+    }
   } catch (error) {
     if (String(error).includes('Unknown encoder')) {
-      await runWithCodec('libx264')
+      const audioFilter = includeAudio ? buildAudioFilter(strategyId) : ''
+      try {
+        await runWithCodec('libx264', audioFilter)
+      } catch (innerError) {
+        const message = String(innerError)
+        if (
+          includeAudio &&
+          audioFilter &&
+          (message.includes('No such filter') ||
+            message.includes('Error while filtering') ||
+            message.includes('matches no streams'))
+        ) {
+          await runWithCodec('libx264', '')
+          return
+        }
+        throw innerError
+      }
       return
     }
     throw error
