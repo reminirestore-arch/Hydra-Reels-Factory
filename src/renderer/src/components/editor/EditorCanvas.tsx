@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState, ChangeEvent, JSX} from 'react';
+import { useEffect, useRef, useState, ChangeEvent, JSX } from 'react'
 import * as fabric from 'fabric';
 
 export const EditorCanvas = (): JSX.Element => {
