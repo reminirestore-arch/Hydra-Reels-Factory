@@ -220,6 +220,11 @@ export const EditorCanvas = ({
   useEffect(() => {
     if (!canvasRef.current || fabricRef.current) return
 
+    canvasRef.current.width = CANVAS_WIDTH
+    canvasRef.current.height = CANVAS_HEIGHT
+    canvasRef.current.style.width = `${CANVAS_WIDTH}px`
+    canvasRef.current.style.height = `${CANVAS_HEIGHT}px`
+
     const canvas = new fabric.Canvas(canvasRef.current, {
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
@@ -227,12 +232,32 @@ export const EditorCanvas = ({
       preserveObjectStacking: true,
       selection: true
     })
+    canvas.setDimensions({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, { cssOnly: true })
+    canvas.calcOffset()
 
     fabricRef.current = canvas
 
     return () => {
       canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
       fabricRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+
+    const handleResize = (): void => {
+      canvas.setDimensions({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, { cssOnly: true })
+      canvas.calcOffset()
+      canvas.requestRenderAll()
+    }
+
+    window.addEventListener('resize', handleResize)
+    handleResize()
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
     }
   }, [])
 
