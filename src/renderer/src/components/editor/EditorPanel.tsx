@@ -1,38 +1,35 @@
-import { useState, JSX } from 'react';
+import { useState, JSX } from 'react'
 import {
   Button,
   Card,
-  // CardBody убрали
   Slider,
   Switch,
   Chip,
-  Tabs,
-  Tab,
-  // Divider убрали
+  Tabs, // Import only Tabs (Tab is now Tabs.Tab)
   ScrollShadow
-} from "@heroui/react";
-import { VideoFile, StrategyType } from '@shared/types';
-import { Wand2, Zap, Activity, Layers, Play, Save } from 'lucide-react';
+} from '@heroui/react'
+import { VideoFile, StrategyType } from '@shared/types'
+import { Wand2, Zap, Activity, Layers, Play, Save } from 'lucide-react'
 
 export interface EditorSettings {
-  strategy: StrategyType;
-  volume: number;
-  speed: number;
-  saturation: number;
-  vignette: boolean;
-  captions: boolean;
+  strategy: StrategyType
+  volume: number
+  speed: number
+  saturation: number
+  vignette: boolean
+  captions: boolean
 }
 
 interface EditorPanelProps {
-  file: VideoFile;
+  file: VideoFile
 }
 
 const STRATEGIES = [
   { id: 'IG1', label: 'Юмор', desc: 'Focus + Vignette', icon: <Wand2 size={18} /> },
   { id: 'IG2', label: 'POV', desc: 'Dynamic + Saturation', icon: <Zap size={18} /> },
   { id: 'IG3', label: 'Кликбейт', desc: 'High Contrast', icon: <Activity size={18} /> },
-  { id: 'IG4', label: 'ASMR', desc: 'Cinema + Grain', icon: <Layers size={18} /> },
-] as const;
+  { id: 'IG4', label: 'ASMR', desc: 'Cinema + Grain', icon: <Layers size={18} /> }
+] as const
 
 export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
   const [settings, setSettings] = useState<EditorSettings>({
@@ -41,12 +38,14 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
     speed: 1.0,
     saturation: 1.0,
     vignette: false,
-    captions: false,
-  });
+    captions: false
+  })
+
+  const currentStrategy = STRATEGIES.find((s) => s.id === settings.strategy)
 
   return (
     <div className="flex flex-col h-full bg-black/90 relative border-l border-white/5">
-      {/* Фон (шум) */}
+      {/* Background Noise */}
       <div className="absolute inset-0 z-0 opacity-5 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
 
       {/* Header */}
@@ -57,63 +56,66 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
               {file.name}
             </h2>
             <div className="flex gap-2 mt-2">
-              <Chip size="sm" variant="flat" color="default" className="text-xs">1080p</Chip>
-              <Chip size="sm" variant="flat" color="warning" className="text-xs">MP4</Chip>
+              <Chip size="sm" variant="flat" color="default" className="text-xs">
+                1080p
+              </Chip>
+              <Chip size="sm" variant="flat" color="warning" className="text-xs">
+                MP4
+              </Chip>
             </div>
           </div>
-          <Button isIconOnly color="primary" variant="shadow" size="sm" radius="full">
+          <Button isIconOnly size="sm">
             <Play size={16} fill="currentColor" />
           </Button>
         </div>
       </div>
 
-      {/* Manual Divider (вместо компонента Divider) */}
       <div className="w-full h-px bg-white/10 my-4" />
 
       {/* Main Content */}
       <ScrollShadow className="flex-1 px-6 z-10 space-y-8 pb-24">
-
         {/* Strategy Selector */}
         <div>
           <label className="text-xs text-default-500 font-bold uppercase tracking-wider mb-3 block">
             Стратегия обработки
           </label>
+
+          {/* Updated Tabs Component */}
           <Tabs
-            aria-label="Strategies"
-            color="primary"
-            variant="underlined"
+            variant="secondary" // Replaces "underlined"
             selectedKey={settings.strategy}
-            onSelectionChange={(key) => setSettings(s => ({...s, strategy: key as StrategyType}))}
-            fullWidth
-            classNames={{
-              tabList: "gap-6 w-full relative rounded-none p-0 border-b border-white/10",
-              cursor: "w-full bg-primary",
-              tab: "max-w-fit px-0 h-12",
-              tabContent: "group-data-[selected=true]:text-primary"
-            }}
+            onSelectionChange={(key) =>
+              setSettings((s) => ({ ...s, strategy: key as StrategyType }))
+            }
+            className="w-full"
           >
-            {STRATEGIES.map((strat) => (
-              <Tab
-                key={strat.id}
-                title={
-                  <div className="flex items-center gap-2">
-                    {strat.icon}
-                    <span>{strat.id}</span>
-                  </div>
-                }
-              />
-            ))}
+            <Tabs.ListContainer>
+              <Tabs.List
+                className="w-full grid grid-cols-4 gap-4 border-b border-white/10 pb-0"
+                aria-label="Strategies"
+              >
+                {STRATEGIES.map((strat) => (
+                  <Tabs.Tab
+                    key={strat.id}
+                    id={strat.id}
+                    className="h-12 px-0 flex items-center justify-center data-[selected=true]:text-primary"
+                  >
+                    <div className="flex items-center gap-2 z-10">
+                      {strat.icon}
+                      <span>{strat.id}</span>
+                    </div>
+                    {/* Explicit Indicator as per Anatomy */}
+                    <Tabs.Indicator className="bg-primary" />
+                  </Tabs.Tab>
+                ))}
+              </Tabs.List>
+            </Tabs.ListContainer>
           </Tabs>
 
           <Card className="mt-4 bg-default-100/10 border border-white/5 shadow-sm">
-            {/* Manual CardBody (вместо компонента) */}
             <div className="p-4">
-              <p className="text-sm font-medium text-foreground">
-                {STRATEGIES.find(s => s.id === settings.strategy)?.label}
-              </p>
-              <p className="text-xs text-default-400 mt-1">
-                {STRATEGIES.find(s => s.id === settings.strategy)?.desc}
-              </p>
+              <p className="text-sm font-medium text-foreground">{currentStrategy?.label}</p>
+              <p className="text-xs text-default-400 mt-1">{currentStrategy?.desc}</p>
             </div>
           </Card>
         </div>
@@ -128,13 +130,13 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
             minValue={0.5}
             defaultValue={1.0}
             value={settings.speed}
-            onChange={(v) => setSettings({...settings, speed: v as number})}
+            onChange={(v) => setSettings({ ...settings, speed: v as number })}
             showSteps={true}
             color="secondary"
             classNames={{
-              label: "text-xs font-medium text-default-600",
-              value: "text-xs font-bold text-default-600",
-              track: "bg-default-500/20",
+              label: 'text-xs font-medium text-default-600',
+              value: 'text-xs font-bold text-default-600',
+              track: 'bg-default-500/20'
             }}
           />
 
@@ -146,12 +148,12 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
             minValue={0.0}
             defaultValue={1.0}
             value={settings.saturation}
-            onChange={(v) => setSettings({...settings, saturation: v as number})}
+            onChange={(v) => setSettings({ ...settings, saturation: v as number })}
             color="warning"
             classNames={{
-              label: "text-xs font-medium text-default-600",
-              value: "text-xs font-bold text-default-600",
-              track: "bg-default-500/20",
+              label: 'text-xs font-medium text-default-600',
+              value: 'text-xs font-bold text-default-600',
+              track: 'bg-default-500/20'
             }}
           />
         </div>
@@ -160,9 +162,9 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
         <div className="space-y-4">
           <Switch
             isSelected={settings.vignette}
-            onValueChange={(v) => setSettings({...settings, vignette: v})}
+            onValueChange={(v) => setSettings({ ...settings, vignette: v })}
             classNames={{
-              wrapper: "group-data-[selected=true]:bg-primary",
+              wrapper: 'group-data-[selected=true]:bg-primary'
             }}
           >
             <div className="flex flex-col">
@@ -173,10 +175,10 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
 
           <Switch
             isSelected={settings.captions}
-            onValueChange={(v) => setSettings({...settings, captions: v})}
+            onValueChange={(v) => setSettings({ ...settings, captions: v })}
             color="success"
             classNames={{
-              wrapper: "group-data-[selected=true]:bg-success",
+              wrapper: 'group-data-[selected=true]:bg-success'
             }}
           >
             <div className="flex flex-col">
@@ -185,7 +187,6 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
             </div>
           </Switch>
         </div>
-
       </ScrollShadow>
 
       {/* Footer Actions */}
@@ -203,5 +204,5 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
         </Button>
       </div>
     </div>
-  );
-};
+  )
+}

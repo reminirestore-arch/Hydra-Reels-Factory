@@ -1,36 +1,18 @@
-// Пробуем официальный импорт
-import { heroui } from "@heroui/react";
+import { heroui } from '@heroui/react'
 
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    // В v4 это поле нужно для плагина, чтобы он знал, какие файлы сканировать
-    // Укажи здесь путь к node_modules, как требуют некоторые версии плагина
-    "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}"
+    './src/renderer/index.html',
+    './src/renderer/src/**/*.{js,ts,jsx,tsx}',
+    // 👇 ОБЯЗАТЕЛЬНО: Путь к компонентам HeroUI
+    './node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}'
   ],
   theme: {
-    extend: {
-      fontFamily: {
-        sans: ["Inter", "sans-serif"],
-      },
-    },
+    extend: {}
   },
-  darkMode: "class",
+  darkMode: 'class',
   plugins: [
-    heroui({
-      themes: {
-        dark: {
-          colors: {
-            background: "#000000",
-            foreground: "#ECEDEE",
-            primary: {
-              DEFAULT: "#DD62ED",
-              foreground: "#ffffff",
-            },
-            focus: "#F182F6",
-          },
-        },
-      },
-    }),
-  ],
-};
+    heroui() // Инициализация плагина
+  ]
+}

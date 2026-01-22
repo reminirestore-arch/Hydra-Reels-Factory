@@ -1,16 +1,4 @@
+/* app/globals.css */
+/*@layer theme, base, components, utilities;*/
 @import "tailwindcss";
-
-/* 👇 Это обязательно для Tailwind v4 + HeroUI */
-@source "../../../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
-
-@theme {
-  --font-sans: "Inter", sans-serif;
-  --color-background: #000000;
-  --color-foreground: #ECEDEE;
-}
-
-@layer base {
-  body {
-    @apply bg-background text-foreground antialiased min-h-screen;
-  }
-}
+@import "@heroui/styles";

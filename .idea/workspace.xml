@@ -1,20 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="4ad23621-5d67-4c97-9905-f825cd5e8694" name="Changes" comment="- fix path">
-      <change afterPath="$PROJECT_DIR$/src/renderer/src/components/editor/EditorPanel.tsx" afterDir="false" />
+    <list default="true" id="4ad23621-5d67-4c97-9905-f825cd5e8694" name="Changes" comment="- hz!!!!">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/electron.vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/electron.vite.config.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/postcss.config.js" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/index.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/preload/index.d.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/preload/index.d.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/preload/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/preload/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/renderer/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/src/renderer/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/renderer/src/assets/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/renderer/src/assets/main.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/renderer/src/components/Dashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/renderer/src/components/Dashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/renderer/src/components/editor/EditorPanel.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/renderer/src/components/editor/EditorPanel.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/renderer/src/main.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/renderer/src/main.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/types.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tailwind.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/tailwind.config.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -131,7 +130,7 @@
       <option name="presentableId" value="Default" />
       <updated>1768957254856</updated>
       <workItem from="1768957256121" duration="23558000" />
-      <workItem from="1769044061238" duration="710000" />
+      <workItem from="1769044061238" duration="9882000" />
     </task>
     <task id="LOCAL-00001" summary="first commit">
       <option name="closed" value="true" />
@@ -205,7 +204,15 @@
       <option name="project" value="LOCAL" />
       <updated>1769037204751</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="- hz!!!!">
+      <option name="closed" value="true" />
+      <created>1769045092889</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1769045092889</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -221,6 +228,7 @@
     <MESSAGE value="- fix Tailwind version&#10;- small fixes" />
     <MESSAGE value="- fix" />
     <MESSAGE value="- fix path" />
-    <option name="LAST_COMMIT_MESSAGE" value="- fix path" />
+    <MESSAGE value="- hz!!!!" />
+    <option name="LAST_COMMIT_MESSAGE" value="- hz!!!!" />
   </component>
 </project>

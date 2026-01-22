@@ -2,34 +2,25 @@ import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from 'ffmpeg-static';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import * as crypto from 'crypto';
-// 👇 Импортируем общий тип
-import { VideoFile } from '@shared/types';
+import ffmpeg from 'fluent-ffmpeg'
+import ffmpegPath from 'ffmpeg-static'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import * as crypto from 'crypto'
 
+// --- НАСТРОЙКА FFMPEG ---
 if (ffmpegPath) {
-  ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'));
+  ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'))
 }
 
 // --- УТИЛИТЫ ---
-
-/**
- * Умное ожидание файла (Polling).
- * Проверяет наличие файла каждые `interval` мс до истечения `timeout`.
- */
 const waitForFile = (filePath: string, timeout = 2000, interval = 100): Promise<void> => {
   return new Promise((resolve, reject) => {
     const startTime = Date.now()
-
-    // 👇 Добавлено ': void'
     const check = (): void => {
       fs.access(filePath, fs.constants.F_OK, (err) => {
         if (!err) {
-          // Файл найден!
           setTimeout(() => resolve(), 50)
         } else if (Date.now() - startTime > timeout) {
           reject(new Error(`Timeout waiting for file: ${filePath}`))
@@ -38,19 +29,18 @@ const waitForFile = (filePath: string, timeout = 2000, interval = 100): Promise<
         }
       })
     }
-
     check()
   })
 }
 
-// --- API HANDLERS ---
+// --- API HANDLERS (Это чинит загрузку файлов!) ---
 
 ipcMain.handle('extract-frame', async (_, filePath: string): Promise<string> => {
-  if (!filePath) throw new Error('Путь к файлу не найден');
+  if (!filePath) throw new Error('Путь к файлу не найден')
 
-  const tempDir = os.tmpdir();
-  const fileName = `thumb_${crypto.randomUUID()}.jpg`;
-  const outputPath = path.join(tempDir, fileName);
+  const tempDir = os.tmpdir()
+  const fileName = `thumb_${crypto.randomUUID()}.jpg`
+  const outputPath = path.join(tempDir, fileName)
 
   return new Promise((resolve) => {
     ffmpeg(filePath)
@@ -60,61 +50,57 @@ ipcMain.handle('extract-frame', async (_, filePath: string): Promise<string> => 
       .output(outputPath)
       .on('end', async () => {
         try {
-          // 👇 ИСПОЛЬЗУЕМ POLLING ВМЕСТО SETTIMEOUT
-          await waitForFile(outputPath);
-
-          const imgBuffer = fs.readFileSync(outputPath);
-          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`;
-          fs.unlinkSync(outputPath);
-          resolve(base64);
+          await waitForFile(outputPath)
+          const imgBuffer = fs.readFileSync(outputPath)
+          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`
+          fs.unlinkSync(outputPath)
+          resolve(base64)
         } catch (e) {
-          console.error('Ошибка чтения превью:', e);
-          resolve(''); // Возвращаем пустоту, чтобы не крашить UI
+          console.error('Ошибка чтения превью:', e)
+          resolve('')
         }
       })
       .on('error', (err) => {
-        console.error('FFmpeg Error:', err);
-        resolve('');
+        console.error('FFmpeg Error:', err)
+        resolve('')
       })
-      .run();
-  });
-});
+      .run()
+  })
+})
 
 ipcMain.handle('select-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openDirectory'],
     title: 'Выберите папку с видео'
-  });
-  if (canceled) return null;
-  return filePaths[0];
-});
+  })
+  if (canceled) return null
+  return filePaths[0]
+})
 
-// 👇 Типизируем возвращаемое значение
-ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<VideoFile[]> => {
-  if (!folderPath) return [];
+ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<any[]> => {
+  if (!folderPath) return []
 
   try {
-    const files = fs.readdirSync(folderPath);
-    const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi'];
+    const files = fs.readdirSync(folderPath)
+    const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi']
 
     return files
-      .filter(file => {
-        const ext = path.extname(file).toLowerCase();
-        return videoExtensions.includes(ext) && !file.startsWith('.');
+      .filter((file) => {
+        const ext = path.extname(file).toLowerCase()
+        return videoExtensions.includes(ext) && !file.startsWith('.')
       })
-      .map(fileName => ({
+      .map((fileName) => ({
         id: crypto.randomUUID(),
         name: fileName,
-        path: path.join(folderPath, fileName),
-        // thumbnail пока undefined
-      }));
+        path: path.join(folderPath, fileName)
+        // thumbnail генерируется лениво
+      }))
   } catch (err) {
-    console.error('Scan Error:', err);
-    return [];
+    console.error('Scan Error:', err)
+    return []
   }
-});
+})
 
-// ... далее код создания окна (createWindow) без изменений ...
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -123,9 +109,10 @@ function createWindow(): void {
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
+      // 👇 КРИТИЧНО: Убедись, что тут .mjs (так как у тебя type: module)
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
-      contextIsolation: true // Должно быть true
+      contextIsolation: true
     }
   })
 
@@ -150,7 +137,9 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
   createWindow()
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
