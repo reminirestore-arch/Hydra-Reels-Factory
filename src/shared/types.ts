@@ -10,7 +10,7 @@ export interface OverlayTiming {
 export interface TextStyleSettings {
   fontSize: number
   color: string
-  align: 'center'
+  align: 'left' | 'center' | 'right'
 }
 
 export interface BackgroundStyleSettings {
@@ -18,6 +18,7 @@ export interface BackgroundStyleSettings {
   height: number
   color: string
   opacity: number
+  radius: number
   position: 'center'
 }
 
