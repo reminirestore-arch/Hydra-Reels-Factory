@@ -1,12 +1,16 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* Сброс стилей для корректного растягивания на весь экран */
-html, body, #root {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden; /* Запрещаем скролл на уровне окна */
+/* 👇 Это обязательно для Tailwind v4 + HeroUI */
+@source "../../../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --color-background: #000000;
+  --color-foreground: #ECEDEE;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased min-h-screen;
+  }
 }

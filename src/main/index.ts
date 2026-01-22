@@ -23,23 +23,25 @@ if (ffmpegPath) {
  */
 const waitForFile = (filePath: string, timeout = 2000, interval = 100): Promise<void> => {
   return new Promise((resolve, reject) => {
-    const startTime = Date.now();
+    const startTime = Date.now()
 
-    const check = () => {
+    // 👇 Добавлено ': void'
+    const check = (): void => {
       fs.access(filePath, fs.constants.F_OK, (err) => {
         if (!err) {
-          // Файл найден! Но дадим еще крошечный буфер на завершение записи байтов
-          setTimeout(resolve, 50);
+          // Файл найден!
+          setTimeout(() => resolve(), 50)
         } else if (Date.now() - startTime > timeout) {
-          reject(new Error(`Timeout waiting for file: ${filePath}`));
+          reject(new Error(`Timeout waiting for file: ${filePath}`))
         } else {
-          setTimeout(check, interval); // Пробуем снова
+          setTimeout(check, interval)
         }
-      });
-    };
-    check();
-  });
-};
+      })
+    }
+
+    check()
+  })
+}
 
 // --- API HANDLERS ---
 
@@ -121,8 +123,9 @@ function createWindow(): void {
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      preload: join(__dirname, '../preload/index.mjs'),
+      sandbox: false,
+      contextIsolation: true // Должно быть true
     }
   })
 

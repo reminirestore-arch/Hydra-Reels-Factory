@@ -1,5 +1,6 @@
 {
   "name": "hydra-reels-factory",
+  "type": "module",
   "version": "1.0.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
@@ -23,7 +24,9 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "@heroui/react": "^2.8.7",
+    "@heroui/react": "^3.0.0-beta.5",
+    "@heroui/styles": "^3.0.0-beta.5",
+    "@tailwindcss/vite": "^4.1.18",
     "clsx": "^2.1.1",
     "fabric": "^7.1.0",
     "ffmpeg-static": "^5.3.0",
@@ -33,7 +36,8 @@
     "lucide-react": "^0.562.0",
     "p-limit": "^7.2.0",
     "react-konva": "^19.2.1",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -44,7 +48,6 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "autoprefixer": "^10.4.23",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
@@ -52,11 +55,9 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
-    "postcss": "^8.5.6",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
   }

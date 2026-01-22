@@ -1,6 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 // 👇 Импорт типа (обрати внимание на путь, он относителен этого файла)
-import { VideoFile } from '../shared/types'
+import { VideoFile } from '@shared/types'
 
 declare global {
   interface Window {
