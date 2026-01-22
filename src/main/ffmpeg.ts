@@ -31,8 +31,15 @@ const tempFiles = new Set<string>()
 
 const createTempPath = (prefix: string, ext: string): string => {
   const tempDir = os.tmpdir()
+  // Создаем подпапку, чтобы не мусорить в корне tmp
+  const appTempDir = path.join(tempDir, 'hydra-reels-temp')
+
+  if (!fs.existsSync(appTempDir)) {
+    fs.mkdirSync(appTempDir, { recursive: true })
+  }
+
   const fileName = `${prefix}_${crypto.randomUUID()}.${ext}`
-  const filePath = path.join(tempDir, fileName)
+  const filePath = path.join(appTempDir, fileName)
   tempFiles.add(filePath)
   return filePath
 }
@@ -104,7 +111,9 @@ export const extractFrameAsDataUrl = async (filePath: string): Promise<string> =
   })
 }
 
-export const generateThumbnail = async (filePath: string): Promise<{ path: string; dataUrl: string } | null> => {
+export const generateThumbnail = async (
+  filePath: string
+): Promise<{ path: string; dataUrl: string } | null> => {
   const outputPath = createTempPath('thumb', 'jpg')
 
   return new Promise((resolve) => {
@@ -163,9 +172,11 @@ const buildAudioFilter = (strategyId: 'IG1' | 'IG2' | 'IG3' | 'IG4'): string => 
     case 'IG2':
       return 'atempo=1.01'
     case 'IG3':
-      return 'anequalizer=c0 f=200 w=100 g=-2 t=1|c0 f=6000 w=1000 g=2 t=0'
+      // БЕЗОПАСНЫЙ ВАРИАНТ: V-shape EQ без спецсимволов |
+      return 'equalizer=f=200:t=q:w=1:g=-2,equalizer=f=6000:t=q:w=1:g=2'
     case 'IG4':
-      return 'acompressor=threshold=-20dB:ratio=9:attack=200:release=1000,firequalizer=gain_entry=\'entry(12000,5)\''
+      // БЕЗОПАСНЫЙ ВАРИАНТ: High shelf (air) + компрессия без вложенных кавычек
+      return 'acompressor=threshold=-20dB:ratio=9:attack=200:release=1000,treble=g=5:f=12000'
     default:
       return ''
   }
@@ -188,27 +199,22 @@ export const renderStrategyVideo = async (options: {
 
       const filterChain: string[] = [videoFilter]
 
+      // ИСПРАВЛЕНИЕ: Используем complexFilter для оверлея
       if (overlayPath) {
         command.input(overlayPath)
-        filterChain.push(
-          `overlay=(W-w)/2:(H-h)/2:enable='between(t,0,${overlayDuration})'`
-        )
+        filterChain.push(`overlay=(W-w)/2:(H-h)/2:enable='between(t,0,${overlayDuration})'`)
+        // complexFilter корректно обрабатывает >1 входа (видео + оверлей)
+        command.complexFilter(filterChain.join(','))
+      } else {
+        // videoFilters подходит только для одного входа
+        command.videoFilters(filterChain.join(','))
       }
-
-      command.videoFilters(filterChain.join(','))
 
       if (includeAudio && audioFilter) {
         command.audioFilters(audioFilter)
       }
 
-      const outputOptions = [
-        '-map_metadata',
-        '-1',
-        '-b:v',
-        '12M',
-        '-c:v',
-        codec
-      ]
+      const outputOptions = ['-map_metadata', '-1', '-b:v', '12M', '-c:v', codec]
 
       if (includeAudio) {
         outputOptions.push('-b:a', '256k', '-c:a', 'aac')
@@ -218,6 +224,7 @@ export const renderStrategyVideo = async (options: {
 
       command
         .outputOptions(outputOptions)
+        .on('stderr', (stderrLine) => console.log('FFmpeg Stderr:', stderrLine)) // Логируем детали
         .on('error', (err) => reject(err))
         .on('end', () => resolve())
         .save(outputPath)
@@ -230,6 +237,7 @@ export const renderStrategyVideo = async (options: {
       await runWithCodec('h264_videotoolbox', audioFilter)
     } catch (error) {
       const message = String(error)
+      // Если ошибка связана с аудио-фильтрами, пробуем без них
       if (
         includeAudio &&
         audioFilter &&
@@ -237,6 +245,7 @@ export const renderStrategyVideo = async (options: {
           message.includes('Error while filtering') ||
           message.includes('matches no streams'))
       ) {
+        console.warn('Audio filter failed, retrying without audio filters...')
         await runWithCodec('h264_videotoolbox', '')
         return
       }
@@ -248,18 +257,10 @@ export const renderStrategyVideo = async (options: {
       try {
         await runWithCodec('libx264', audioFilter)
       } catch (innerError) {
-        const message = String(innerError)
-        if (
-          includeAudio &&
-          audioFilter &&
-          (message.includes('No such filter') ||
-            message.includes('Error while filtering') ||
-            message.includes('matches no streams'))
-        ) {
-          await runWithCodec('libx264', '')
-          return
-        }
-        throw innerError
+        // Fallback без аудио фильтров для libx264
+        console.warn('Software encoding with filters failed, retrying plain...')
+        await runWithCodec('libx264', '')
+        return
       }
       return
     }
