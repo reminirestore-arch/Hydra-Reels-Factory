@@ -14,13 +14,14 @@ import {
   renderStrategyVideo,
   saveOverlayFromDataUrl
 } from './ffmpeg'
+import { createDefaultStrategy } from '../shared/defaults'
 import { StrategyType, VideoFile } from '../shared/types'
 
 const createEmptyStrategies = (): VideoFile['strategies'] => ({
-  IG1: { id: 'IG1', isReady: false },
-  IG2: { id: 'IG2', isReady: false },
-  IG3: { id: 'IG3', isReady: false },
-  IG4: { id: 'IG4', isReady: false }
+  IG1: createDefaultStrategy('IG1'),
+  IG2: createDefaultStrategy('IG2'),
+  IG3: createDefaultStrategy('IG3'),
+  IG4: createDefaultStrategy('IG4')
 })
 
 ipcMain.handle('extract-frame', async (_, filePath: string): Promise<string> => {
@@ -75,8 +76,8 @@ ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<VideoFile[]
             thumbnailPath: thumbnail?.path ?? '',
             thumbnailDataUrl: thumbnail?.dataUrl ?? '',
             duration,
-            overlayDuration: 5,
-            strategies: createEmptyStrategies()
+            strategies: createEmptyStrategies(),
+            processingStatus: 'idle'
           }
         })
       )
@@ -108,6 +109,7 @@ ipcMain.handle(
       outputDir: string
       outputName: string
       overlayPath?: string
+      overlayStart?: number
       overlayDuration?: number
       strategyId: StrategyType
     }
@@ -117,6 +119,7 @@ ipcMain.handle(
         inputPath: payload.inputPath,
         outputPath: path.join(payload.outputDir, payload.outputName),
         overlayPath: payload.overlayPath,
+        overlayStart: payload.overlayStart,
         overlayDuration: payload.overlayDuration,
         strategyId: payload.strategyId
       })

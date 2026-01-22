@@ -15,6 +15,7 @@ declare global {
         outputDir: string
         outputName: string
         overlayPath?: string
+        overlayStart?: number
         overlayDuration?: number
         strategyId: StrategyType
       }) => Promise<boolean>

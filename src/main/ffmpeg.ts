@@ -186,10 +186,18 @@ export const renderStrategyVideo = async (options: {
   inputPath: string
   outputPath: string
   overlayPath?: string
+  overlayStart?: number
   overlayDuration?: number
   strategyId: 'IG1' | 'IG2' | 'IG3' | 'IG4'
 }): Promise<void> => {
-  const { inputPath, outputPath, overlayPath, overlayDuration = 5, strategyId } = options
+  const {
+    inputPath,
+    outputPath,
+    overlayPath,
+    overlayStart = 0,
+    overlayDuration = 5,
+    strategyId
+  } = options
   const includeAudio = await hasAudioStream(inputPath)
 
   const runWithCodec = (codec: string, audioFilter: string): Promise<void> => {
@@ -202,7 +210,8 @@ export const renderStrategyVideo = async (options: {
       // ИСПРАВЛЕНИЕ: Используем complexFilter для оверлея
       if (overlayPath) {
         command.input(overlayPath)
-        filterChain.push(`overlay=(W-w)/2:(H-h)/2:enable='between(t,0,${overlayDuration})'`)
+        const overlayEnd = overlayStart + overlayDuration
+        filterChain.push(`overlay=(W-w)/2:(H-h)/2:enable='between(t,${overlayStart},${overlayEnd})'`)
         // complexFilter корректно обрабатывает >1 входа (видео + оверлей)
         command.complexFilter(filterChain.join(','))
       } else {
