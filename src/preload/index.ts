@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { VideoFile } from '@shared/types'
 
@@ -6,7 +6,8 @@ import { VideoFile } from '@shared/types'
 const api = {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   scanFolder: (path: string): Promise<VideoFile[]> => ipcRenderer.invoke('scan-folder', path),
-  extractFrame: (filePath: string): Promise<string> => ipcRenderer.invoke('extract-frame', filePath)
+  extractFrame: (filePath: string): Promise<string> => ipcRenderer.invoke('extract-frame', filePath),
+  getFilePath: (file: File): string => webUtils.getPathForFile(file)
 }
 
 // Экспонируем API в мир (window.api)

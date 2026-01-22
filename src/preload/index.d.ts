@@ -8,6 +8,7 @@ declare global {
       selectFolder: () => Promise<string | null>
       scanFolder: (path: string) => Promise<VideoFile[]>
       extractFrame: (filePath: string) => Promise<string>
+      getFilePath: (file: File) => string
     }
   }
 }
