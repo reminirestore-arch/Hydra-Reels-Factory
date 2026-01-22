@@ -27,10 +27,29 @@ const waitForFile = (filePath: string, timeout = 4000, interval = 100): Promise<
   })
 }
 
+const tempFiles = new Set<string>()
+
 const createTempPath = (prefix: string, ext: string): string => {
   const tempDir = os.tmpdir()
   const fileName = `${prefix}_${crypto.randomUUID()}.${ext}`
-  return path.join(tempDir, fileName)
+  const filePath = path.join(tempDir, fileName)
+  tempFiles.add(filePath)
+  return filePath
+}
+
+const removeTempFile = async (filePath: string): Promise<void> => {
+  if (!tempFiles.has(filePath)) return
+  try {
+    await fs.promises.unlink(filePath)
+  } catch {
+    // ignore cleanup failures
+  } finally {
+    tempFiles.delete(filePath)
+  }
+}
+
+export const cleanupTempFiles = async (): Promise<void> => {
+  await Promise.allSettled(Array.from(tempFiles).map((filePath) => removeTempFile(filePath)))
 }
 
 export const getVideoDuration = (filePath: string): Promise<number> => {
@@ -58,7 +77,7 @@ export const extractFrameAsDataUrl = async (filePath: string): Promise<string> =
           await waitForFile(outputPath)
           const imgBuffer = fs.readFileSync(outputPath)
           const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`
-          fs.unlinkSync(outputPath)
+          await removeTempFile(outputPath)
           resolve(base64)
         } catch (error) {
           console.error('Ошибка чтения превью:', error)
@@ -90,11 +109,13 @@ export const generateThumbnail = async (filePath: string): Promise<{ path: strin
           resolve({ path: outputPath, dataUrl: base64 })
         } catch (error) {
           console.error('Ошибка чтения миниатюры:', error)
+          await removeTempFile(outputPath)
           resolve(null)
         }
       })
       .on('error', (err) => {
         console.error('FFmpeg Error:', err)
+        void removeTempFile(outputPath)
         resolve(null)
       })
       .run()
@@ -132,7 +153,7 @@ const buildAudioFilter = (strategyId: 'IG1' | 'IG2' | 'IG3' | 'IG4'): string => 
     case 'IG3':
       return 'anequalizer=c0 f=200 w=100 g=-2 t=1|c0 f=6000 w=1000 g=2 t=0'
     case 'IG4':
-      return 'anoisesrc=d=1:c=pink,volume=0.02,amix=inputs=2:duration=shortest'
+      return 'acompressor=threshold=-20dB:ratio=9:attack=200:release=1000,firequalizer=gain_entry=\'entry(12000,5)\''
     default:
       return ''
   }
