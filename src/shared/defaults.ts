@@ -15,6 +15,7 @@ export const buildDefaultOverlaySettings = (): OverlaySettings => ({
     height: 120,
     color: '#000000',
     opacity: 0.6,
+    radius: 12,
     position: 'center'
   }
 })
