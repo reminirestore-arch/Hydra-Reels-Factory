@@ -162,7 +162,7 @@ export const EditorCanvas = ({
     }
 
     if (backgroundRef.current && textRef.current) {
-      textRef.current.bringToFront()
+      canvas.bringObjectToFront(textRef.current)
     }
 
     applyOverlaySettings()
