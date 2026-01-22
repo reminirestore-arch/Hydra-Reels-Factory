@@ -8,6 +8,7 @@ import * as crypto from 'crypto'
 import pLimit from 'p-limit'
 import {
   extractFrameAsDataUrl,
+  cleanupTempFiles,
   generateThumbnail,
   getVideoDuration,
   renderStrategyVideo,
@@ -168,6 +169,10 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('before-quit', () => {
+  void cleanupTempFiles()
 })
 
 app.on('window-all-closed', () => {

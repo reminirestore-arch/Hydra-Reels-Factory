@@ -108,11 +108,11 @@ export const EditorCanvas = ({ filePath, initialState, onSave, onClose }: Editor
     canvas.requestRenderAll()
 
     const overlayDataUrl = canvas.toDataURL({ format: 'png' })
+    const canvasState = canvas.toJSON()
 
     canvas.backgroundImage = background
     canvas.requestRenderAll()
 
-    const canvasState = canvas.toJSON()
     const textData = canvas
       .getObjects()
       .filter((obj) => obj.type === 'i-text' || obj.type === 'text')
