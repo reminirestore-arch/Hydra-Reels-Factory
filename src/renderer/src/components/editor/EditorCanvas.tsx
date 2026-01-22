@@ -1,17 +1,21 @@
-import { useEffect, useRef, useState, ChangeEvent, JSX } from 'react'
+import { useEffect, useRef, JSX } from 'react'
 import * as fabric from 'fabric'
 import { Button } from '@heroui/react'
-import { Upload, Type, MonitorPlay } from 'lucide-react'
+import { Type, MonitorPlay, Save, X } from 'lucide-react'
 
-export const EditorCanvas = (): JSX.Element => {
+interface EditorCanvasProps {
+  filePath: string
+  initialState?: object
+  onSave: (payload: { canvasState: object; overlayDataUrl: string; textData: string }) => void
+  onClose: () => void
+}
+
+const CANVAS_WIDTH = 450
+const CANVAS_HEIGHT = 800
+
+export const EditorCanvas = ({ filePath, initialState, onSave, onClose }: EditorCanvasProps): JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
-  // Используем state только для хранения факта инициализации, если нужно ре-рендерить UI
-  const [, setCanvasInstance] = useState<fabric.Canvas | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const CANVAS_WIDTH = 450
-  const CANVAS_HEIGHT = 800
 
   useEffect(() => {
     if (!canvasRef.current || fabricRef.current) return
@@ -19,68 +23,58 @@ export const EditorCanvas = (): JSX.Element => {
     const canvas = new fabric.Canvas(canvasRef.current, {
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
-      backgroundColor: '#111',
-      // В v7 preserveObjectStacking по умолчанию true, но можно оставить для явности
+      backgroundColor: 'transparent',
       preserveObjectStacking: true,
       selection: true
     })
 
     fabricRef.current = canvas
-    setCanvasInstance(canvas)
 
     return () => {
-      // dispose() в v6/v7 возвращает Promise, обрабатываем его
       canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
       fabricRef.current = null
-      setCanvasInstance(null)
     }
   }, [])
 
-  // Обработчик выбора файла
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = e.target.files?.[0]
-    // Используем ref вместо state для работы с логикой канваса
+  useEffect(() => {
     const canvas = fabricRef.current
-    if (!file || !canvas) return
+    if (!canvas || !filePath) return
 
-    const filePath = window.api.getFilePath(file)
+    const loadFrame = async (): Promise<void> => {
+      try {
+        const imageUrl = await window.api.extractFrame(filePath)
+        if (!imageUrl) return
 
-    console.log('Выбран файл:', file.name)
-    console.log('Путь к файлу (safe):', filePath)
+        const img = await fabric.FabricImage.fromURL(imageUrl)
+        const scaleX = CANVAS_WIDTH / img.width!
+        const scaleY = CANVAS_HEIGHT / img.height!
+        const scale = Math.max(scaleX, scaleY)
 
-    let imageUrl = ''
+        img.set({
+          left: CANVAS_WIDTH / 2,
+          top: CANVAS_HEIGHT / 2,
+          scaleX: scale,
+          scaleY: scale
+        })
 
-    try {
-      if (file.type.startsWith('video/')) {
-        console.log('Запрашиваю кадр для:', filePath)
-        imageUrl = await window.api.extractFrame(filePath)
-      } else {
-        imageUrl = URL.createObjectURL(file)
+        canvas.backgroundImage = img
+        canvas.requestRenderAll()
+      } catch (err) {
+        console.error('Ошибка загрузки кадра:', err)
       }
-
-      // Добавление картинки на холст
-      const img = await fabric.FabricImage.fromURL(imageUrl)
-
-      const scaleX = CANVAS_WIDTH / img.width!
-      const scaleY = CANVAS_HEIGHT / img.height!
-      const scale = Math.max(scaleX, scaleY)
-
-      img.set({
-        // originX/Y по умолчанию 'center' в v7, явно указывать не нужно
-        left: CANVAS_WIDTH / 2,
-        top: CANVAS_HEIGHT / 2,
-        scaleX: scale,
-        scaleY: scale
-      })
-
-      // Мутируем объект канваса через ref, а не через state
-      canvas.backgroundImage = img
-      canvas.requestRenderAll()
-    } catch (err) {
-      console.error('Ошибка:', err)
-      alert('Не удалось обработать файл: ' + err)
     }
-  }
+
+    void loadFrame()
+  }, [filePath])
+
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !initialState) return
+
+    canvas.loadFromJSON(initialState, () => {
+      canvas.requestRenderAll()
+    })
+  }, [initialState])
 
   const addText = (): void => {
     const canvas = fabricRef.current
@@ -89,7 +83,6 @@ export const EditorCanvas = (): JSX.Element => {
     const text = new fabric.IText('Текст Рилса', {
       left: CANVAS_WIDTH / 2,
       top: CANVAS_HEIGHT / 2,
-      // originX/Y удалены, так как 'center' теперь дефолт
       fontFamily: 'Arial',
       fill: '#ffffff',
       fontSize: 32,
@@ -106,37 +99,35 @@ export const EditorCanvas = (): JSX.Element => {
     canvas.setActiveObject(text)
   }
 
+  const handleSave = (): void => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+
+    const background = canvas.backgroundImage
+    canvas.backgroundImage = null
+    canvas.requestRenderAll()
+
+    const overlayDataUrl = canvas.toDataURL({ format: 'png' })
+
+    canvas.backgroundImage = background
+    canvas.requestRenderAll()
+
+    const canvasState = canvas.toJSON()
+    const textData = canvas
+      .getObjects()
+      .filter((obj) => obj.type === 'i-text' || obj.type === 'text')
+      .map((obj) => (obj as fabric.IText).text ?? '')
+      .join(' ')
+      .trim()
+
+    onSave({ canvasState, overlayDataUrl, textData })
+  }
+
   return (
     <div className="flex flex-col h-full w-full bg-black/95">
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept="image/*,video/*"
-        className="hidden"
-      />
-
-      {/* Верхняя панель инструментов */}
       <div className="h-16 bg-black/50 border-b border-white/10 flex items-center justify-between px-6 shrink-0 backdrop-blur-md">
         <div className="flex gap-3">
-          {/* Кнопка загрузки */}
-          <Button
-            size="sm"
-            variant="primary"
-            onPress={() => fileInputRef.current?.click()}
-            className="font-medium"
-          >
-            <Upload size={16} />
-            Загрузить файл
-          </Button>
-
-          {/* Кнопка добавления текста */}
-          <Button
-            size="sm"
-            variant="primary" // или "shadow" если вернули, но solid надежнее для v3
-            onPress={addText}
-            className="font-medium shadow-lg shadow-primary/20"
-          >
+          <Button size="sm" variant="primary" onPress={addText} className="font-medium shadow-lg shadow-primary/20">
             <Type size={16} />
             Добавить текст
           </Button>
@@ -146,13 +137,22 @@ export const EditorCanvas = (): JSX.Element => {
           <MonitorPlay size={14} />
           9:16 • 1080p Preview
         </div>
+
+        <div className="flex gap-2">
+          <Button size="sm" variant="flat" onPress={onClose} className="font-medium">
+            <X size={16} />
+            Закрыть
+          </Button>
+          <Button size="sm" variant="solid" onPress={handleSave} className="font-medium bg-success text-black">
+            <Save size={16} />
+            Сохранить
+          </Button>
+        </div>
       </div>
 
-      {/* Область канваса */}
       <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-gray-900 to-black">
         <div className="relative shadow-2xl shadow-black ring-1 ring-white/10">
           <canvas ref={canvasRef} />
-          {/* Оверлей для эффекта "экрана" */}
           <div className="pointer-events-none absolute inset-0 border border-white/5 mix-blend-overlay"></div>
         </div>
       </div>

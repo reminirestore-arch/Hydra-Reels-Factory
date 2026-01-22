@@ -1,5 +1,5 @@
 import { useState, JSX } from 'react'
-import { Button, Card, Slider, Switch, Chip, Tabs, ScrollShadow, Label } from '@heroui/react'
+import { Button, Card, Slider, Switch, Chip, ScrollShadow, Label } from '@heroui/react'
 import { VideoFile, StrategyType } from '@shared/types'
 import { Wand2, Zap, Activity, Layers, Play, Save } from 'lucide-react'
 
@@ -14,6 +14,9 @@ export interface EditorSettings {
 
 interface EditorPanelProps {
   file: VideoFile
+  onOpenEditor: (strategy: StrategyType) => void
+  onUpdateDuration: (duration: number) => void
+  onApplySettings: (settings: EditorSettings) => void
 }
 
 const STRATEGIES = [
@@ -23,7 +26,12 @@ const STRATEGIES = [
   { id: 'IG4', label: 'ASMR', desc: 'Cinema + Grain', icon: <Layers size={18} /> }
 ] as const
 
-export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
+export const EditorPanel = ({
+  file,
+  onOpenEditor,
+  onUpdateDuration,
+  onApplySettings
+}: EditorPanelProps): JSX.Element => {
   const [settings, setSettings] = useState<EditorSettings>({
     strategy: 'IG1',
     volume: 0,
@@ -33,23 +41,19 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
     captions: false
   })
 
-  const currentStrategy = STRATEGIES.find((s) => s.id === settings.strategy)
-
   return (
     <div className="flex flex-col h-full bg-black/90 relative border-l border-white/5">
-      {/* Background Noise */}
-      <div className="absolute inset-0 z-0 opacity-5 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+      <div className="absolute inset-0 z-0 opacity-5 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.15),transparent)]" />
 
-      {/* Header */}
       <div className="z-10 p-6 pb-2 shrink-0">
         <div className="flex justify-between items-start">
           <div className="overflow-hidden">
-            <h2 className="text-xl font-bold text-foreground truncate" title={file.name}>
-              {file.name}
+            <h2 className="text-xl font-bold text-foreground truncate" title={file.filename}>
+              {file.filename}
             </h2>
             <div className="flex gap-2 mt-2">
               <Chip size="sm" variant="soft" color="default" className="text-xs">
-                1080p
+                {file.duration ? `${Math.round(file.duration)}s` : '...' }
               </Chip>
               <Chip size="sm" variant="soft" color="warning" className="text-xs">
                 MP4
@@ -64,54 +68,62 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
 
       <div className="w-full h-px bg-white/10 my-4" />
 
-      {/* Main Content */}
       <ScrollShadow className="flex-1 px-6 z-10 space-y-8 pb-24">
-        {/* Strategy Selector */}
         <div>
           <label className="text-xs text-default-500 font-bold uppercase tracking-wider mb-3 block">
-            Стратегия обработки
+            4 версии обработки
           </label>
-
-          <Tabs
-            variant="secondary"
-            selectedKey={settings.strategy}
-            onSelectionChange={(key) =>
-              setSettings((s) => ({ ...s, strategy: key as StrategyType }))
-            }
-            className="w-full"
-          >
-            <Tabs.ListContainer>
-              <Tabs.List
-                className="w-full grid grid-cols-4 gap-4 border-b border-white/10 pb-0"
-                aria-label="Strategies"
-              >
-                {STRATEGIES.map((strat) => (
-                  <Tabs.Tab
-                    key={strat.id}
-                    id={strat.id}
-                    className="h-12 px-0 flex items-center justify-center data-[selected=true]:text-primary"
-                  >
-                    <div className="flex items-center gap-2 z-10">
-                      {strat.icon}
-                      <span>{strat.id}</span>
+          <div className="grid grid-cols-2 gap-4">
+            {STRATEGIES.map((strat) => {
+              const strategyState = file.strategies[strat.id]
+              return (
+                <Card
+                  key={strat.id}
+                  className="bg-default-100/10 border border-white/5 shadow-sm"
+                >
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        {strat.icon}
+                        {strat.id}: {strat.label}
+                      </div>
+                      <Chip size="sm" color={strategyState.isReady ? 'success' : 'default'}>
+                        {strategyState.isReady ? 'ГОТОВО' : 'НЕ ГОТОВО'}
+                      </Chip>
                     </div>
-                    <Tabs.Indicator className="bg-primary" />
-                  </Tabs.Tab>
-                ))}
-              </Tabs.List>
-            </Tabs.ListContainer>
-          </Tabs>
-
-          <Card className="mt-4 bg-default-100/10 border border-white/5 shadow-sm">
-            <div className="p-4">
-              <p className="text-sm font-medium text-foreground">{currentStrategy?.label}</p>
-              <p className="text-xs text-default-400 mt-1">{currentStrategy?.desc}</p>
-            </div>
-          </Card>
+                    <p className="text-xs text-default-400">{strat.desc}</p>
+                    {strategyState.textData && (
+                      <p className="text-xs text-default-300 line-clamp-2">“{strategyState.textData}”</p>
+                    )}
+                    <Button size="sm" variant="flat" onPress={() => onOpenEditor(strat.id)}>
+                      Настроить
+                    </Button>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
         </div>
 
-        {/* Sliders Section */}
         <div className="space-y-6">
+          <Slider
+            step={0.5}
+            maxValue={15}
+            minValue={1}
+            value={file.overlayDuration}
+            onChange={(v) => onUpdateDuration(v as number)}
+            className="w-full"
+          >
+            <div className="flex justify-between mb-1">
+              <Label className="text-xs font-medium text-default-600">Длительность текста (сек)</Label>
+              <Slider.Output className="text-xs font-bold text-default-600" />
+            </div>
+            <Slider.Track className="bg-default-500/20 h-1">
+              <Slider.Fill className="bg-primary" />
+              <Slider.Thumb className="bg-primary size-3" />
+            </Slider.Track>
+          </Slider>
+
           <Slider
             step={0.1}
             maxValue={2.0}
@@ -153,7 +165,6 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
           </Slider>
         </div>
 
-        {/* Toggles Section */}
         <div className="space-y-4">
           <Switch
             isSelected={settings.vignette}
@@ -185,16 +196,12 @@ export const EditorPanel = ({ file }: EditorPanelProps): JSX.Element => {
         </div>
       </ScrollShadow>
 
-      {/* Footer Actions */}
       <div className="p-4 border-t border-white/10 bg-black/40 backdrop-blur-md absolute bottom-0 left-0 right-0 z-20">
-        {/* 👇 ИСПРАВЛЕННАЯ КНОПКА ПО СТАНДАРТУ V3 */}
         <Button
           fullWidth
           size="lg"
-          // Вместо color="success" используем классы bg-success
-          // Вместо startContent кладем иконку внутрь
           className="font-bold text-black shadow-lg shadow-success/40 bg-success hover:bg-success/90 flex items-center justify-center gap-2"
-          onPress={() => console.log('Exporting settings:', settings)}
+          onPress={() => onApplySettings(settings)}
         >
           <Save size={20} />
           ПРИМЕНИТЬ
