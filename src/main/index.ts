@@ -2,70 +2,28 @@ import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import ffmpeg from 'fluent-ffmpeg'
-import ffmpegPath from 'ffmpeg-static'
 import * as fs from 'fs'
-import * as os from 'os'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import {
+  extractFrameAsDataUrl,
+  generateThumbnail,
+  getVideoDuration,
+  renderStrategyVideo,
+  saveOverlayFromDataUrl
+} from './ffmpeg'
+import { StrategyType, VideoFile } from '../shared/types'
 
-// --- НАСТРОЙКА FFMPEG ---
-if (ffmpegPath) {
-  ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'))
-}
-
-// --- УТИЛИТЫ ---
-const waitForFile = (filePath: string, timeout = 2000, interval = 100): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now()
-    const check = (): void => {
-      fs.access(filePath, fs.constants.F_OK, (err) => {
-        if (!err) {
-          setTimeout(() => resolve(), 50)
-        } else if (Date.now() - startTime > timeout) {
-          reject(new Error(`Timeout waiting for file: ${filePath}`))
-        } else {
-          setTimeout(check, interval)
-        }
-      })
-    }
-    check()
-  })
-}
-
-// --- API HANDLERS (Это чинит загрузку файлов!) ---
+const createEmptyStrategies = (): VideoFile['strategies'] => ({
+  IG1: { id: 'IG1', isReady: false },
+  IG2: { id: 'IG2', isReady: false },
+  IG3: { id: 'IG3', isReady: false },
+  IG4: { id: 'IG4', isReady: false }
+})
 
 ipcMain.handle('extract-frame', async (_, filePath: string): Promise<string> => {
   if (!filePath) throw new Error('Путь к файлу не найден')
-
-  const tempDir = os.tmpdir()
-  const fileName = `thumb_${crypto.randomUUID()}.jpg`
-  const outputPath = path.join(tempDir, fileName)
-
-  return new Promise((resolve) => {
-    ffmpeg(filePath)
-      .on('start', () => console.log('📸 Start frame:', fileName))
-      .seekInput('1.0')
-      .frames(1)
-      .output(outputPath)
-      .on('end', async () => {
-        try {
-          await waitForFile(outputPath)
-          const imgBuffer = fs.readFileSync(outputPath)
-          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`
-          fs.unlinkSync(outputPath)
-          resolve(base64)
-        } catch (e) {
-          console.error('Ошибка чтения превью:', e)
-          resolve('')
-        }
-      })
-      .on('error', (err) => {
-        console.error('FFmpeg Error:', err)
-        resolve('')
-      })
-      .run()
-  })
+  return extractFrameAsDataUrl(filePath)
 })
 
 ipcMain.handle('select-folder', async () => {
@@ -77,29 +35,93 @@ ipcMain.handle('select-folder', async () => {
   return filePaths[0]
 })
 
-ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<any[]> => {
+ipcMain.handle('select-output-folder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Выберите папку для результата'
+  })
+  if (canceled) return null
+  return filePaths[0]
+})
+
+ipcMain.handle('scan-folder', async (_, folderPath: string): Promise<VideoFile[]> => {
   if (!folderPath) return []
 
   try {
-    const files = fs.readdirSync(folderPath)
+    const entries = await fs.promises.readdir(folderPath)
     const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi']
 
-    return files
-      .filter((file) => {
-        const ext = path.extname(file).toLowerCase()
-        return videoExtensions.includes(ext) && !file.startsWith('.')
+    const files = entries.filter((file) => {
+      const ext = path.extname(file).toLowerCase()
+      return videoExtensions.includes(ext) && !file.startsWith('.')
+    })
+
+    const results = await Promise.all(
+      files.map(async (fileName) => {
+        const fullPath = path.join(folderPath, fileName)
+        const [thumbnail, duration] = await Promise.all([
+          generateThumbnail(fullPath),
+          getVideoDuration(fullPath)
+        ])
+
+        return {
+          id: crypto.randomUUID(),
+          filename: fileName,
+          fullPath,
+          thumbnailPath: thumbnail?.path ?? '',
+          thumbnailDataUrl: thumbnail?.dataUrl ?? '',
+          duration,
+          overlayDuration: 5,
+          strategies: createEmptyStrategies()
+        }
       })
-      .map((fileName) => ({
-        id: crypto.randomUUID(),
-        name: fileName,
-        path: path.join(folderPath, fileName)
-        // thumbnail генерируется лениво
-      }))
+    )
+
+    return results
   } catch (err) {
     console.error('Scan Error:', err)
     return []
   }
 })
+
+ipcMain.handle('save-overlay', async (_, dataUrl: string): Promise<string> => {
+  if (!dataUrl) return ''
+  try {
+    return await saveOverlayFromDataUrl(dataUrl)
+  } catch (err) {
+    console.error('Save overlay error:', err)
+    return ''
+  }
+})
+
+ipcMain.handle(
+  'render-strategy',
+  async (
+    _,
+    payload: {
+      inputPath: string
+      outputDir: string
+      outputName: string
+      overlayPath?: string
+      overlayDuration?: number
+      strategyId: StrategyType
+    }
+  ): Promise<boolean> => {
+    try {
+      await renderStrategyVideo({
+        inputPath: payload.inputPath,
+        outputPath: path.join(payload.outputDir, payload.outputName),
+        overlayPath: payload.overlayPath,
+        overlayDuration: payload.overlayDuration,
+        strategyId: payload.strategyId
+      })
+      return true
+    } catch (err) {
+      console.error('Render error:', err)
+      return false
+    }
+  }
+)
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -109,7 +131,6 @@ function createWindow(): void {
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      // 👇 КРИТИЧНО: Убедись, что тут .mjs (так как у тебя type: module)
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
       contextIsolation: true

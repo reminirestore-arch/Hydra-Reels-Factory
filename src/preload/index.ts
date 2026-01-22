@@ -1,16 +1,24 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { VideoFile } from '@shared/types'
+import { StrategyType, VideoFile } from '@shared/types'
 
-// Создаем API, который вызывает методы из main/index.ts
 const api = {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
+  selectOutputFolder: (): Promise<string | null> => ipcRenderer.invoke('select-output-folder'),
   scanFolder: (path: string): Promise<VideoFile[]> => ipcRenderer.invoke('scan-folder', path),
   extractFrame: (filePath: string): Promise<string> => ipcRenderer.invoke('extract-frame', filePath),
+  saveOverlay: (dataUrl: string): Promise<string> => ipcRenderer.invoke('save-overlay', dataUrl),
+  renderStrategy: (payload: {
+    inputPath: string
+    outputDir: string
+    outputName: string
+    overlayPath?: string
+    overlayDuration?: number
+    strategyId: StrategyType
+  }): Promise<boolean> => ipcRenderer.invoke('render-strategy', payload),
   getFilePath: (file: File): string => webUtils.getPathForFile(file)
 }
 
-// Экспонируем API в мир (window.api)
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
