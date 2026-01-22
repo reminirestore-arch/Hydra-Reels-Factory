@@ -6,7 +6,8 @@ const api = {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   selectOutputFolder: (): Promise<string | null> => ipcRenderer.invoke('select-output-folder'),
   scanFolder: (path: string): Promise<VideoFile[]> => ipcRenderer.invoke('scan-folder', path),
-  extractFrame: (filePath: string): Promise<string> => ipcRenderer.invoke('extract-frame', filePath),
+  extractFrame: (filePath: string): Promise<string> =>
+    ipcRenderer.invoke('extract-frame', filePath),
   saveOverlay: (dataUrl: string): Promise<string> => ipcRenderer.invoke('save-overlay', dataUrl),
   renderStrategy: (payload: {
     inputPath: string

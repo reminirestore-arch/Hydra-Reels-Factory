@@ -25,9 +25,12 @@ export const Dashboard = (): JSX.Element => {
   const [stopRequested, setStopRequested] = useState(false)
   const stopRequestedRef = useRef(false)
 
-  const selectedFile = useMemo(() => files.find((f) => f.id === selectedFileId) ?? null, [files, selectedFileId])
+  const selectedFile = useMemo(
+    () => files.find((f) => f.id === selectedFileId) ?? null,
+    [files, selectedFileId]
+  )
 
-  const handleSelectFolder = async () => {
+  const handleSelectFolder = async (): Promise<void> => {
     if (isProcessing) return
     try {
       const folderPath = await window.api.selectFolder()
@@ -45,7 +48,7 @@ export const Dashboard = (): JSX.Element => {
     }
   }
 
-  const handleSelectOutputFolder = async () => {
+  const handleSelectOutputFolder = async (): Promise<void> => {
     if (isProcessing) return
     try {
       const folderPath = await window.api.selectOutputFolder()
@@ -56,12 +59,12 @@ export const Dashboard = (): JSX.Element => {
     }
   }
 
-  const handleFileSelect = (file: VideoFile) => {
+  const handleFileSelect = (file: VideoFile): void => {
     if (isProcessing) return
     setSelectedFileId(file.id)
   }
 
-  const handleOpenEditor = (strategy: StrategyType) => {
+  const handleOpenEditor = (strategy: StrategyType): void => {
     if (isProcessing) return
     setActiveStrategy(strategy)
   }
@@ -72,7 +75,7 @@ export const Dashboard = (): JSX.Element => {
     textData: string
     overlaySettings: OverlaySettings
     profileSettings: StrategyProfileSettings
-  }) => {
+  }): Promise<void> => {
     if (!selectedFile || !activeStrategy) return
 
     const overlayPath = await window.api.saveOverlay(payload.overlayDataUrl)
@@ -102,7 +105,7 @@ export const Dashboard = (): JSX.Element => {
     setActiveStrategy(null)
   }
 
-  const handleStartProcessing = async () => {
+  const handleStartProcessing = async (): Promise<void> => {
     if (!outputPath || !inputPath) return
     if (isProcessing) return
 
@@ -145,9 +148,7 @@ export const Dashboard = (): JSX.Element => {
         )
       } else {
         setFiles((prev) =>
-          prev.map((item) =>
-            item.id === file.id ? { ...item, processingStatus: 'idle' } : item
-          )
+          prev.map((item) => (item.id === file.id ? { ...item, processingStatus: 'idle' } : item))
         )
         break
       }
@@ -158,7 +159,7 @@ export const Dashboard = (): JSX.Element => {
     stopRequestedRef.current = false
   }
 
-  const handleStopProcessing = () => {
+  const handleStopProcessing = (): void => {
     stopRequestedRef.current = true
     setStopRequested(true)
   }
@@ -193,7 +194,9 @@ export const Dashboard = (): JSX.Element => {
           </div>
         </div>
 
-        <ScrollShadow className={`flex-1 p-4 space-y-3 ${isProcessing ? 'opacity-60 pointer-events-none' : ''}`}>
+        <ScrollShadow
+          className={`flex-1 p-4 space-y-3 ${isProcessing ? 'opacity-60 pointer-events-none' : ''}`}
+        >
           {files.map((file) => {
             const customCount = getCustomCount(file)
             const processingLabel =
