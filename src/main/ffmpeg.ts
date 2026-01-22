@@ -211,7 +211,9 @@ export const renderStrategyVideo = async (options: {
       if (overlayPath) {
         command.input(overlayPath)
         const overlayEnd = overlayStart + overlayDuration
-        filterChain.push(`overlay=(W-w)/2:(H-h)/2:enable='between(t,${overlayStart},${overlayEnd})'`)
+        filterChain.push(
+          `overlay=(W-w)/2:(H-h)/2:enable='between(t,${overlayStart},${overlayEnd})'`
+        )
         // complexFilter корректно обрабатывает >1 входа (видео + оверлей)
         command.complexFilter(filterChain.join(','))
       } else {
@@ -265,7 +267,7 @@ export const renderStrategyVideo = async (options: {
       const audioFilter = includeAudio ? buildAudioFilter(strategyId) : ''
       try {
         await runWithCodec('libx264', audioFilter)
-      } catch (innerError) {
+      } catch {
         // Fallback без аудио фильтров для libx264
         console.warn('Software encoding with filters failed, retrying plain...')
         await runWithCodec('libx264', '')

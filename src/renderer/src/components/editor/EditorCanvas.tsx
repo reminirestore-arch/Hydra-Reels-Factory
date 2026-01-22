@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, JSX } from 'react'
+import { useCallback, useEffect, useRef, useState, JSX } from 'react'
 import * as fabric from 'fabric'
 import { Button, ScrollShadow, Slider, Label } from '@heroui/react'
-import { MonitorPlay, Save, Type, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, MonitorPlay, Save, Type, X } from 'lucide-react'
 import { buildDefaultOverlaySettings, createDefaultStrategy } from '@shared/defaults'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 
@@ -24,14 +24,7 @@ interface EditorCanvasProps {
 const CANVAS_WIDTH = 450
 const CANVAS_HEIGHT = 800
 
-const hexToRgba = (hex: string, opacity: number): string => {
-  const cleanHex = hex.replace('#', '')
-  const bigint = parseInt(cleanHex, 16)
-  const r = (bigint >> 16) & 255
-  const g = (bigint >> 8) & 255
-  const b = bigint & 255
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`
-}
+type OverlayText = fabric.Textbox | fabric.IText
 
 export const EditorCanvas = ({
   filePath,
@@ -44,15 +37,149 @@ export const EditorCanvas = ({
 }: EditorCanvasProps): JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
-  const textRef = useRef<fabric.IText | null>(null)
+  const textRef = useRef<OverlayText | null>(null)
   const backgroundRef = useRef<fabric.Rect | null>(null)
+  const linkRef = useRef({ attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 })
 
-  const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(
-    initialOverlaySettings ?? buildDefaultOverlaySettings()
-  )
+  const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() => {
+    const baseSettings = initialOverlaySettings ?? buildDefaultOverlaySettings()
+    return {
+      ...baseSettings,
+      text: {
+        ...baseSettings.text,
+        align: baseSettings.text.align ?? 'center'
+      },
+      background: {
+        ...baseSettings.background,
+        radius: baseSettings.background.radius ?? 12
+      }
+    }
+  })
   const [profileSettings, setProfileSettings] = useState<StrategyProfileSettings>(
     initialProfileSettings ?? createDefaultStrategy(strategyId).profileSettings
   )
+  const resolveInitialTextValue = useCallback((): string => {
+    if (!initialState || typeof initialState !== 'object') return 'Текст Рилса'
+
+    const objects = (
+      initialState as {
+        objects?: Array<{ data?: { role?: string }; text?: string; type?: string }>
+      }
+    ).objects
+
+    const textObject = objects?.find(
+      (obj) =>
+        obj.data?.role === 'overlay-text' ||
+        obj.type === 'i-text' ||
+        obj.type === 'textbox' ||
+        obj.type === 'text'
+    )
+
+    return textObject?.text ?? 'Текст Рилса'
+  }, [initialState])
+
+  const [textValue, setTextValue] = useState<string>(resolveInitialTextValue)
+  const overlaySettingsRef = useRef(overlaySettings)
+
+  const clampRadius = (radius: number, width: number, height: number): number =>
+    Math.max(0, Math.min(radius, Math.min(width, height) / 2))
+
+  const configureTextControls = useCallback((text: OverlayText): void => {
+    text.set({
+      lockUniScaling: true
+    })
+  }, [])
+
+  const updateTextValueFromCanvas = useCallback((): void => {
+    if (!textRef.current) return
+    setTextValue(textRef.current.text ?? '')
+  }, [])
+
+  const buildTextObject = useCallback(
+    (textValueOverride?: string): fabric.Textbox =>
+      new fabric.Textbox(textValueOverride ?? 'Текст Рилса', {
+        left: CANVAS_WIDTH / 2,
+        top: CANVAS_HEIGHT / 2,
+        fontFamily: 'Arial',
+        fill: overlaySettings.text.color,
+        fontSize: overlaySettings.text.fontSize,
+        fontWeight: 'bold',
+        textAlign: overlaySettings.text.align,
+        width: overlaySettings.background.width,
+        originX: 'center',
+        originY: 'center',
+        editable: true,
+        selectable: true,
+        splitByGrapheme: false
+      }),
+    [
+      overlaySettings.background.width,
+      overlaySettings.text.align,
+      overlaySettings.text.color,
+      overlaySettings.text.fontSize
+    ]
+  )
+
+  const updateLinkOffsets = useCallback((): void => {
+    if (!backgroundRef.current || !textRef.current) return
+    const background = backgroundRef.current
+    const text = textRef.current
+    background.setCoords()
+    text.setCoords()
+    const backgroundCenter = background.getCenterPoint()
+    const textCenter = text.getCenterPoint()
+    const angle = fabric.util.degreesToRadians(background.angle ?? 0)
+    const dx = textCenter.x - backgroundCenter.x
+    const dy = textCenter.y - backgroundCenter.y
+    const cos = Math.cos(-angle)
+    const sin = Math.sin(-angle)
+    const localX = dx * cos - dy * sin
+    const localY = dx * sin + dy * cos
+    linkRef.current.offsetX = localX / (background.scaleX ?? 1)
+    linkRef.current.offsetY = localY / (background.scaleY ?? 1)
+    linkRef.current.rotationOffset = (text.angle ?? 0) - (background.angle ?? 0)
+  }, [])
+
+  const isTextInsideBackground = useCallback((): boolean => {
+    if (!backgroundRef.current || !textRef.current) return false
+    const textCenter = textRef.current.getCenterPoint()
+    return backgroundRef.current.containsPoint(textCenter)
+  }, [])
+
+  const attachTextToBackground = useCallback((): void => {
+    linkRef.current.attached = true
+    updateLinkOffsets()
+  }, [updateLinkOffsets])
+
+  const syncTextWithBackground = useCallback((): void => {
+    if (!backgroundRef.current || !textRef.current || !linkRef.current.attached) return
+    const background = backgroundRef.current
+    const text = textRef.current
+    const backgroundCenter = background.getCenterPoint()
+    const angle = fabric.util.degreesToRadians(background.angle ?? 0)
+    const scaledX = linkRef.current.offsetX * (background.scaleX ?? 1)
+    const scaledY = linkRef.current.offsetY * (background.scaleY ?? 1)
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    const rotatedX = scaledX * cos - scaledY * sin
+    const rotatedY = scaledX * sin + scaledY * cos
+    const targetCenter = new fabric.Point(
+      backgroundCenter.x + rotatedX,
+      backgroundCenter.y + rotatedY
+    )
+    text.set({
+      left: targetCenter.x,
+      top: targetCenter.y,
+      angle: (background.angle ?? 0) + linkRef.current.rotationOffset,
+      originX: 'center',
+      originY: 'center'
+    })
+    text.setCoords()
+  }, [])
+
+  useEffect(() => {
+    overlaySettingsRef.current = overlaySettings
+  }, [overlaySettings])
 
   useEffect(() => {
     if (!canvasRef.current || fabricRef.current) return
@@ -104,7 +231,50 @@ export const EditorCanvas = ({
     void loadFrame()
   }, [filePath])
 
-  const syncOverlayObjects = (): void => {
+  const applyOverlaySettings = useCallback((): void => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+
+    if (textRef.current) {
+      textRef.current.set({
+        fontSize: overlaySettings.text.fontSize,
+        fill: overlaySettings.text.color,
+        textAlign: overlaySettings.text.align,
+        width: overlaySettings.background.width
+      })
+      textRef.current.setCoords()
+    }
+
+    if (backgroundRef.current) {
+      const radius = clampRadius(
+        overlaySettings.background.radius ?? 0,
+        overlaySettings.background.width,
+        overlaySettings.background.height
+      )
+      backgroundRef.current.set({
+        width: overlaySettings.background.width,
+        height: overlaySettings.background.height,
+        fill: overlaySettings.background.color,
+        opacity: overlaySettings.background.opacity,
+        rx: radius,
+        ry: radius
+      })
+      backgroundRef.current.setCoords()
+    }
+
+    canvas.requestRenderAll()
+  }, [
+    overlaySettings.background.color,
+    overlaySettings.background.height,
+    overlaySettings.background.opacity,
+    overlaySettings.background.radius,
+    overlaySettings.background.width,
+    overlaySettings.text.align,
+    overlaySettings.text.color,
+    overlaySettings.text.fontSize
+  ])
+
+  const syncOverlayObjects = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas) return
 
@@ -116,15 +286,41 @@ export const EditorCanvas = ({
       (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-background'
     )
 
-    if (existingText && existingText.type === 'i-text') {
-      textRef.current = existingText as fabric.IText
+    if (existingText && (existingText.type === 'i-text' || existingText.type === 'textbox')) {
+      if (existingText.type === 'i-text') {
+        const legacyText = existingText as fabric.IText
+        const upgradedText = buildTextObject(legacyText.text ?? 'Текст Рилса')
+        upgradedText.set({
+          left: legacyText.left,
+          top: legacyText.top,
+          angle: legacyText.angle,
+          fill: legacyText.fill,
+          fontSize: legacyText.fontSize,
+          fontWeight: legacyText.fontWeight,
+          textAlign: overlaySettings.text.align
+        })
+        upgradedText.set({ data: { role: 'overlay-text' } })
+        canvas.remove(legacyText)
+        canvas.add(upgradedText)
+        textRef.current = upgradedText
+      } else {
+        textRef.current = existingText as fabric.Textbox
+      }
+      configureTextControls(textRef.current)
+      textRef.current.set({ selectable: true, evented: true })
     }
 
     if (existingBackground && existingBackground.type === 'rect') {
       backgroundRef.current = existingBackground as fabric.Rect
+      backgroundRef.current.set({ selectable: true, evented: true })
     }
 
     if (!backgroundRef.current) {
+      const radius = clampRadius(
+        overlaySettings.background.radius ?? 0,
+        overlaySettings.background.width,
+        overlaySettings.background.height
+      )
       const rect = new fabric.Rect({
         left: CANVAS_WIDTH / 2,
         top: CANVAS_HEIGHT / 2,
@@ -132,9 +328,10 @@ export const EditorCanvas = ({
         height: overlaySettings.background.height,
         originX: 'center',
         originY: 'center',
-        fill: hexToRgba(overlaySettings.background.color, overlaySettings.background.opacity),
-        rx: 12,
-        ry: 12,
+        fill: overlaySettings.background.color,
+        opacity: overlaySettings.background.opacity,
+        rx: radius,
+        ry: radius,
         selectable: true
       })
       rect.set({ data: { role: 'overlay-background' } })
@@ -143,20 +340,9 @@ export const EditorCanvas = ({
     }
 
     if (!textRef.current) {
-      const text = new fabric.IText('Текст Рилса', {
-        left: CANVAS_WIDTH / 2,
-        top: CANVAS_HEIGHT / 2,
-        fontFamily: 'Arial',
-        fill: overlaySettings.text.color,
-        fontSize: overlaySettings.text.fontSize,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        originX: 'center',
-        originY: 'center',
-        editable: true,
-        selectable: true
-      })
+      const text = buildTextObject()
       text.set({ data: { role: 'overlay-text' } })
+      configureTextControls(text)
       textRef.current = text
       canvas.add(text)
     }
@@ -165,32 +351,24 @@ export const EditorCanvas = ({
       canvas.bringObjectToFront(textRef.current)
     }
 
+    if (isTextInsideBackground()) {
+      attachTextToBackground()
+    }
     applyOverlaySettings()
     canvas.requestRenderAll()
-  }
-
-  const applyOverlaySettings = (): void => {
-    const canvas = fabricRef.current
-    if (!canvas) return
-
-    if (textRef.current) {
-      textRef.current.set({
-        fontSize: overlaySettings.text.fontSize,
-        fill: overlaySettings.text.color,
-        textAlign: overlaySettings.text.align
-      })
-    }
-
-    if (backgroundRef.current) {
-      backgroundRef.current.set({
-        width: overlaySettings.background.width,
-        height: overlaySettings.background.height,
-        fill: hexToRgba(overlaySettings.background.color, overlaySettings.background.opacity)
-      })
-    }
-
-    canvas.requestRenderAll()
-  }
+  }, [
+    applyOverlaySettings,
+    attachTextToBackground,
+    buildTextObject,
+    configureTextControls,
+    isTextInsideBackground,
+    overlaySettings.background.color,
+    overlaySettings.background.height,
+    overlaySettings.background.opacity,
+    overlaySettings.background.radius,
+    overlaySettings.background.width,
+    overlaySettings.text.align
+  ])
 
   useEffect(() => {
     const canvas = fabricRef.current
@@ -200,38 +378,184 @@ export const EditorCanvas = ({
       syncOverlayObjects()
       canvas.requestRenderAll()
     })
-  }, [initialState])
+  }, [initialState, syncOverlayObjects])
 
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || initialState) return
     syncOverlayObjects()
-  }, [initialState])
+  }, [initialState, syncOverlayObjects])
 
   useEffect(() => {
     applyOverlaySettings()
-  }, [overlaySettings])
+  }, [applyOverlaySettings])
+
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+
+    const handleObjectMoving = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+
+      if (target === textRef.current && backgroundRef.current) {
+        if (isTextInsideBackground()) {
+          attachTextToBackground()
+        } else {
+          linkRef.current.attached = false
+        }
+      }
+
+      canvas.requestRenderAll()
+    }
+
+    const handleTextChanged = (): void => {
+      updateTextValueFromCanvas()
+    }
+
+    const handleObjectScaling = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+
+      if (target === textRef.current) {
+        const text = textRef.current
+        if (!text) return
+        const scaleX = text.scaleX ?? 1
+        const scaleY = text.scaleY ?? 1
+        const uniformScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
+        text.set({ scaleX: uniformScale, scaleY: uniformScale })
+        text.setCoords()
+      }
+    }
+
+    const handleObjectRotating = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+    }
+
+    const handleObjectModified = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === textRef.current && textRef.current) {
+        const text = textRef.current
+        const scale = ((text.scaleX ?? 1) + (text.scaleY ?? 1)) / 2
+        const currentFontSize = text.fontSize ?? overlaySettingsRef.current.text.fontSize
+        const nextFontSize = Math.max(1, Math.round(currentFontSize * scale))
+        text.set({
+          fontSize: nextFontSize,
+          scaleX: 1,
+          scaleY: 1
+        })
+        text.setCoords()
+        setOverlaySettings((prev) => ({
+          ...prev,
+          text: { ...prev.text, fontSize: nextFontSize }
+        }))
+        if (isTextInsideBackground()) {
+          attachTextToBackground()
+        } else {
+          linkRef.current.attached = false
+        }
+      }
+
+      if (target === backgroundRef.current && backgroundRef.current) {
+        const background = backgroundRef.current
+        const nextWidth = Math.max(20, (background.width ?? 0) * (background.scaleX ?? 1))
+        const nextHeight = Math.max(20, (background.height ?? 0) * (background.scaleY ?? 1))
+        background.set({
+          width: nextWidth,
+          height: nextHeight,
+          scaleX: 1,
+          scaleY: 1
+        })
+        const radius = clampRadius(
+          overlaySettingsRef.current.background.radius ?? 0,
+          nextWidth,
+          nextHeight
+        )
+        background.set({ rx: radius, ry: radius })
+        background.setCoords()
+        setOverlaySettings((prev) => ({
+          ...prev,
+          background: {
+            ...prev.background,
+            width: nextWidth,
+            height: nextHeight
+          }
+        }))
+        if (linkRef.current.attached) {
+          updateLinkOffsets()
+          syncTextWithBackground()
+        }
+      }
+    }
+
+    canvas.on('object:moving', handleObjectMoving)
+    canvas.on('object:scaling', handleObjectScaling)
+    canvas.on('object:rotating', handleObjectRotating)
+    canvas.on('object:modified', handleObjectModified)
+    canvas.on('text:changed', handleTextChanged)
+
+    return () => {
+      canvas.off('object:moving', handleObjectMoving)
+      canvas.off('object:scaling', handleObjectScaling)
+      canvas.off('object:rotating', handleObjectRotating)
+      canvas.off('object:modified', handleObjectModified)
+      canvas.off('text:changed', handleTextChanged)
+    }
+  }, [
+    attachTextToBackground,
+    isTextInsideBackground,
+    syncTextWithBackground,
+    updateLinkOffsets,
+    updateTextValueFromCanvas
+  ])
 
   const handleCenterText = (): void => {
     if (!backgroundRef.current || !textRef.current) return
     textRef.current.set({
       left: backgroundRef.current.left,
       top: backgroundRef.current.top,
+      angle: backgroundRef.current.angle ?? 0,
       originX: 'center',
       originY: 'center'
     })
+    linkRef.current.rotationOffset = 0
+    attachTextToBackground()
     fabricRef.current?.requestRenderAll()
   }
 
-  const handleCenterBackground = (): void => {
+  const handleCenterBackgroundHorizontal = (): void => {
     if (!backgroundRef.current) return
     backgroundRef.current.set({
       left: CANVAS_WIDTH / 2,
+      originX: 'center'
+    })
+    backgroundRef.current.setCoords()
+    syncTextWithBackground()
+    fabricRef.current?.requestRenderAll()
+  }
+
+  const handleCenterBackgroundVertical = (): void => {
+    if (!backgroundRef.current) return
+    backgroundRef.current.set({
       top: CANVAS_HEIGHT / 2,
-      originX: 'center',
       originY: 'center'
     })
-    handleCenterText()
+    backgroundRef.current.setCoords()
+    syncTextWithBackground()
     fabricRef.current?.requestRenderAll()
   }
 
@@ -250,7 +574,8 @@ export const EditorCanvas = ({
     canvas.backgroundImage = null
     canvas.requestRenderAll()
 
-    const overlayDataUrl = canvas.toDataURL({ format: 'png' })
+    const exportScale = 1080 / CANVAS_WIDTH
+    const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
     const canvasState = canvas.toJSON(['data'])
 
     canvas.backgroundImage = background
@@ -258,8 +583,8 @@ export const EditorCanvas = ({
 
     const textData = canvas
       .getObjects()
-      .filter((obj) => obj.type === 'i-text' || obj.type === 'text')
-      .map((obj) => (obj as fabric.IText).text ?? '')
+      .filter((obj) => obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')
+      .map((obj) => (obj as OverlayText).text ?? '')
       .join(' ')
       .trim()
 
@@ -314,7 +639,12 @@ export const EditorCanvas = ({
     <div className="flex flex-col h-full w-full bg-black/95">
       <div className="h-16 bg-black/50 border-b border-white/10 flex items-center justify-between px-6 shrink-0 backdrop-blur-md">
         <div className="flex gap-3">
-          <Button size="sm" variant="primary" onPress={addText} className="font-medium shadow-lg shadow-primary/20">
+          <Button
+            size="sm"
+            variant="primary"
+            onPress={addText}
+            className="font-medium shadow-lg shadow-primary/20"
+          >
             <Type size={16} />
             Добавить текст
           </Button>
@@ -330,7 +660,12 @@ export const EditorCanvas = ({
             <X size={16} />
             Закрыть
           </Button>
-          <Button size="sm" variant="solid" onPress={handleSave} className="font-medium bg-success text-black">
+          <Button
+            size="sm"
+            variant="solid"
+            onPress={handleSave}
+            className="font-medium bg-success text-black"
+          >
             <Save size={16} />
             Сохранить
           </Button>
@@ -348,7 +683,9 @@ export const EditorCanvas = ({
         <aside className="w-96 border-l border-white/10 bg-black/60">
           <ScrollShadow className="h-full p-6 space-y-6">
             <div className="space-y-3">
-              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Тайминг текста</div>
+              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
+                Тайминг текста
+              </div>
               <Slider
                 step={0.5}
                 maxValue={15}
@@ -363,7 +700,9 @@ export const EditorCanvas = ({
                 className="w-full"
               >
                 <div className="flex justify-between mb-1">
-                  <Label className="text-xs font-medium text-default-600">Старт появления (сек)</Label>
+                  <Label className="text-xs font-medium text-default-600">
+                    Старт появления (сек)
+                  </Label>
                   <Slider.Output className="text-xs font-bold text-default-600" />
                 </div>
                 <Slider.Track className="bg-default-500/20 h-1">
@@ -397,7 +736,25 @@ export const EditorCanvas = ({
             </div>
 
             <div className="space-y-3">
-              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Текст</div>
+              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
+                Текст
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-default-600">Содержание</Label>
+                <input
+                  type="text"
+                  value={textValue}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    setTextValue(nextValue)
+                    if (textRef.current) {
+                      textRef.current.set({ text: nextValue })
+                      fabricRef.current?.requestRenderAll()
+                    }
+                  }}
+                  className="h-9 w-full rounded border border-white/10 bg-black/40 px-3 text-sm text-default-200 focus:border-primary/60 focus:outline-none"
+                />
+              </div>
               <Slider
                 step={2}
                 maxValue={96}
@@ -436,13 +793,60 @@ export const EditorCanvas = ({
                 />
               </div>
 
+              <div className="flex items-center justify-between text-xs text-default-600">
+                <span className="font-medium">Выравнивание</span>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={overlaySettings.text.align === 'left' ? 'solid' : 'flat'}
+                    onPress={() =>
+                      setOverlaySettings((prev) => ({
+                        ...prev,
+                        text: { ...prev.text, align: 'left' }
+                      }))
+                    }
+                    className="min-w-9"
+                  >
+                    <AlignLeft size={14} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={overlaySettings.text.align === 'center' ? 'solid' : 'flat'}
+                    onPress={() =>
+                      setOverlaySettings((prev) => ({
+                        ...prev,
+                        text: { ...prev.text, align: 'center' }
+                      }))
+                    }
+                    className="min-w-9"
+                  >
+                    <AlignCenter size={14} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={overlaySettings.text.align === 'right' ? 'solid' : 'flat'}
+                    onPress={() =>
+                      setOverlaySettings((prev) => ({
+                        ...prev,
+                        text: { ...prev.text, align: 'right' }
+                      }))
+                    }
+                    className="min-w-9"
+                  >
+                    <AlignRight size={14} />
+                  </Button>
+                </div>
+              </div>
+
               <Button size="sm" variant="flat" onPress={handleCenterText}>
                 Центрировать внутри подложки
               </Button>
             </div>
 
             <div className="space-y-3">
-              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Подложка</div>
+              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
+                Подложка
+              </div>
               <Slider
                 step={10}
                 maxValue={600}
@@ -490,6 +894,29 @@ export const EditorCanvas = ({
               </Slider>
 
               <Slider
+                step={2}
+                maxValue={80}
+                minValue={0}
+                value={overlaySettings.background.radius}
+                onChange={(value) =>
+                  setOverlaySettings((prev) => ({
+                    ...prev,
+                    background: { ...prev.background, radius: value as number }
+                  }))
+                }
+                className="w-full"
+              >
+                <div className="flex justify-between mb-1">
+                  <Label className="text-xs font-medium text-default-600">Скругление</Label>
+                  <Slider.Output className="text-xs font-bold text-default-600" />
+                </div>
+                <Slider.Track className="bg-default-500/20 h-1">
+                  <Slider.Fill className="bg-primary" />
+                  <Slider.Thumb className="bg-primary size-3" />
+                </Slider.Track>
+              </Slider>
+
+              <Slider
                 step={0.05}
                 maxValue={1}
                 minValue={0}
@@ -527,13 +954,20 @@ export const EditorCanvas = ({
                 />
               </div>
 
-              <Button size="sm" variant="flat" onPress={handleCenterBackground}>
-                Центрировать на канве
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="flat" onPress={handleCenterBackgroundHorizontal}>
+                  Центр по горизонтали
+                </Button>
+                <Button size="sm" variant="flat" onPress={handleCenterBackgroundVertical}>
+                  Центр по вертикали
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-3">
-              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Параметры профиля</div>
+              <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
+                Параметры профиля
+              </div>
               <Slider
                 step={profileConfig.step}
                 maxValue={profileConfig.max}
@@ -548,7 +982,9 @@ export const EditorCanvas = ({
                 className="w-full"
               >
                 <div className="flex justify-between mb-1">
-                  <Label className="text-xs font-medium text-default-600">{profileConfig.label}</Label>
+                  <Label className="text-xs font-medium text-default-600">
+                    {profileConfig.label}
+                  </Label>
                   <Slider.Output className="text-xs font-bold text-default-600" />
                 </div>
                 <Slider.Track className="bg-default-500/20 h-1">

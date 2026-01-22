@@ -1,10 +1,8 @@
-import { Dashboard } from './components/Dashboard';
-import {JSX} from "react";
+import { Dashboard } from './components/Dashboard'
+import { JSX } from 'react'
 
 function App(): JSX.Element {
-  return (
-    <Dashboard />
-  );
+  return <Dashboard />
 }
 
-export default App;
+export default App

@@ -15,7 +15,12 @@ interface EditorModalProps {
   }) => void
 }
 
-export const EditorModal = ({ file, strategyId, onClose, onSave }: EditorModalProps): JSX.Element => {
+export const EditorModal = ({
+  file,
+  strategyId,
+  onClose,
+  onSave
+}: EditorModalProps): JSX.Element => {
   const strategy = file.strategies[strategyId]
 
   return (

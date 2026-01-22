@@ -33,7 +33,7 @@ export const EditorPanel = ({
             </h2>
             <div className="flex gap-2 mt-2">
               <Chip size="sm" variant="soft" color="default" className="text-xs">
-                {file.duration ? `${Math.round(file.duration)}s` : '...' }
+                {file.duration ? `${Math.round(file.duration)}s` : '...'}
               </Chip>
               <Chip size="sm" variant="soft" color="warning" className="text-xs">
                 MP4
@@ -57,23 +57,25 @@ export const EditorPanel = ({
             {STRATEGIES.map((strat) => {
               const strategyState = file.strategies[strat.id]
               return (
-                <Card
-                  key={strat.id}
-                  className="bg-default-100/10 border border-white/5 shadow-sm"
-                >
+                <Card key={strat.id} className="bg-default-100/10 border border-white/5 shadow-sm">
                   <div className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      {strat.icon}
-                      {strat.id}: {strat.label}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        {strat.icon}
+                        {strat.id}: {strat.label}
+                      </div>
+                      <Chip
+                        size="sm"
+                        color={strategyState.status === 'custom' ? 'success' : 'default'}
+                      >
+                        {strategyState.status === 'custom' ? 'КАСТОМНЫЙ' : 'ДЕФОЛТНЫЙ'}
+                      </Chip>
                     </div>
-                    <Chip size="sm" color={strategyState.status === 'custom' ? 'success' : 'default'}>
-                      {strategyState.status === 'custom' ? 'КАСТОМНЫЙ' : 'ДЕФОЛТНЫЙ'}
-                    </Chip>
-                  </div>
                     <p className="text-xs text-default-400">{strat.desc}</p>
                     {strategyState.textData && (
-                      <p className="text-xs text-default-300 line-clamp-2">“{strategyState.textData}”</p>
+                      <p className="text-xs text-default-300 line-clamp-2">
+                        “{strategyState.textData}”
+                      </p>
                     )}
                     <Button
                       size="sm"
