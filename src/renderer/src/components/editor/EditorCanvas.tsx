@@ -523,6 +523,128 @@ export const EditorCanvas = ({
     updateTextValueFromCanvas
   ])
 
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+
+    const handleObjectMoving = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+
+      if (target === textRef.current && backgroundRef.current) {
+        if (isTextInsideBackground()) {
+          attachTextToBackground()
+        } else {
+          linkRef.current.attached = false
+        }
+      }
+
+      canvas.requestRenderAll()
+    }
+
+    const handleTextChanged = (): void => {
+      updateTextValueFromCanvas()
+    }
+
+    const handleObjectScaling = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+
+      if (target === textRef.current) {
+        const text = textRef.current
+        if (!text) return
+        const scaleX = text.scaleX ?? 1
+        const scaleY = text.scaleY ?? 1
+        const uniformScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
+        text.set({ scaleX: uniformScale, scaleY: uniformScale })
+      }
+    }
+
+    const handleObjectRotating = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+      if (target === backgroundRef.current) {
+        syncTextWithBackground()
+      }
+    }
+
+    const handleObjectModified = (event: fabric.IEvent<MouseEvent>): void => {
+      const target = event.target
+      if (!target) return
+
+      if (target === textRef.current && textRef.current) {
+        const text = textRef.current
+        const scale = ((text.scaleX ?? 1) + (text.scaleY ?? 1)) / 2
+        const currentFontSize = text.fontSize ?? overlaySettingsRef.current.text.fontSize
+        const nextFontSize = Math.max(1, Math.round(currentFontSize * scale))
+        text.set({
+          fontSize: nextFontSize,
+          scaleX: 1,
+          scaleY: 1
+        })
+        text.setCoords()
+        setOverlaySettings((prev) => ({
+          ...prev,
+          text: { ...prev.text, fontSize: nextFontSize }
+        }))
+        if (isTextInsideBackground()) {
+          attachTextToBackground()
+        } else {
+          linkRef.current.attached = false
+        }
+      }
+
+      if (target === backgroundRef.current && backgroundRef.current) {
+        const background = backgroundRef.current
+        const nextWidth = Math.max(20, (background.width ?? 0) * (background.scaleX ?? 1))
+        const nextHeight = Math.max(20, (background.height ?? 0) * (background.scaleY ?? 1))
+        background.set({
+          width: nextWidth,
+          height: nextHeight,
+          scaleX: 1,
+          scaleY: 1
+        })
+        const radius = clampRadius(overlaySettingsRef.current.background.radius ?? 0, nextWidth, nextHeight)
+        background.set({ rx: radius, ry: radius })
+        background.setCoords()
+        setOverlaySettings((prev) => ({
+          ...prev,
+          background: {
+            ...prev.background,
+            width: nextWidth,
+            height: nextHeight
+          }
+        }))
+        if (linkRef.current.attached) {
+          updateLinkOffsets()
+          syncTextWithBackground()
+        }
+      }
+    }
+
+    canvas.on('object:moving', handleObjectMoving)
+    canvas.on('object:scaling', handleObjectScaling)
+    canvas.on('object:rotating', handleObjectRotating)
+    canvas.on('object:modified', handleObjectModified)
+    canvas.on('text:changed', handleTextChanged)
+
+    return () => {
+      canvas.off('object:moving', handleObjectMoving)
+      canvas.off('object:scaling', handleObjectScaling)
+      canvas.off('object:rotating', handleObjectRotating)
+      canvas.off('object:modified', handleObjectModified)
+      canvas.off('text:changed', handleTextChanged)
+    }
+  }, [])
+
   const handleCenterText = (): void => {
     if (!backgroundRef.current || !textRef.current) return
     textRef.current.set({
