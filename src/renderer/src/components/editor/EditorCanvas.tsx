@@ -63,6 +63,7 @@ export const EditorCanvas = ({
   const textRef = useRef<OverlayText | null>(null)
   const backgroundRef = useRef<fabric.Rect | null>(null)
   const linkRef = useRef({ attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 })
+  const frameRef = useRef<fabric.FabricImage | null>(null)
 
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() => {
     const baseSettings = initialOverlaySettings ?? buildDefaultOverlaySettings()
@@ -352,6 +353,7 @@ export const EditorCanvas = ({
             scaleY: scale
           })
 
+          frameRef.current = img
           canvas.backgroundImage = img
           canvas.requestRenderAll()
         } catch (err) {
@@ -370,6 +372,10 @@ export const EditorCanvas = ({
   const applyOverlaySettings = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+
+    if (!canvas.backgroundImage && frameRef.current) {
+      canvas.backgroundImage = frameRef.current
+    }
 
     if (textRef.current) {
       textRef.current.set({
@@ -540,9 +546,7 @@ export const EditorCanvas = ({
     const preservedBackground = canvas.backgroundImage
 
     canvas.loadFromJSON(initialState, () => {
-      if (preservedBackground) {
-        canvas.backgroundImage = preservedBackground
-      }
+      canvas.backgroundImage = preservedBackground ?? frameRef.current
       syncOverlayObjects()
       canvas.requestRenderAll()
     })
