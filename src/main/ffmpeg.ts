@@ -1,4 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg'
+import type { StrategyType } from '../shared/types'
 import ffmpegPath from 'ffmpeg-static'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -150,18 +151,27 @@ export const saveOverlayFromDataUrl = async (dataUrl: string): Promise<string> =
   return outputPath
 }
 
-const buildStrategyFilter = (strategyId: 'IG1' | 'IG2' | 'IG3' | 'IG4'): string => {
+const buildStrategyFilter = (strategyId: StrategyType): string => {
+  // Нормализация под 9:16 и ровно 1080x1920 (в редакторе это эквивалентно: cover + center-crop)
+  const normalize = 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
+
   switch (strategyId) {
     case 'IG1':
-      return 'crop=iw*0.98:ih*0.98:(iw-ow)/2:(ih-oh)/2,scale=1080:1920,vignette=PI/8'
+      // лёгкий zoom + vignette, затем нормализация (важно: в конце всегда ровно 1080x1920)
+      return `crop=iw*0.98:ih*0.98,${normalize},vignette=PI/8`
+
     case 'IG2':
-      return 'setpts=0.99*PTS,eq=gamma=1.0:saturation=1.2'
+      // скорость/тон, затем нормализация
+      return `setpts=0.99*PTS,eq=gamma=1.0:saturation=1.2,${normalize}`
+
     case 'IG3':
-      return 'unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.1,fade=t=in:st=0:d=0.3,fade=t=out:st=0:d=0.3'
+      // sharp/contrast/fade, затем нормализация
+      return `unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.1,fade=t=in:st=0:d=0.3,fade=t=out:st=0:d=0.3,${normalize}`
+
     case 'IG4':
-      return 'rotate=0.3*PI/180,scale=1085:1930,crop=1080:1920,noise=c0s=7:allf=t,fade=t=in:st=0:d=0.5,fade=t=out:st=0:d=0.5'
     default:
-      return 'scale=1080:1920'
+      // rotate + grain + fade (уже приводит к 1080x1920, но SAR всё равно фиксируем)
+      return 'rotate=0.3*PI/180,scale=1085:1930,crop=1080:1920,noise=c0s=7:allf=t,fade=t=in:st=0:d=0.5,fade=t=out:st=0:d=0.5,setsar=1'
   }
 }
 
@@ -211,9 +221,7 @@ export const renderStrategyVideo = async (options: {
       if (overlayPath) {
         command.input(overlayPath)
         const overlayEnd = overlayStart + overlayDuration
-        filterChain.push(
-          `overlay=(W-w)/2:(H-h)/2:enable='between(t,${overlayStart},${overlayEnd})'`
-        )
+        filterChain.push(`overlay=0:0:enable='between(t,${overlayStart},${overlayEnd})'`)
         // complexFilter корректно обрабатывает >1 входа (видео + оверлей)
         command.complexFilter(filterChain.join(','))
       } else {
