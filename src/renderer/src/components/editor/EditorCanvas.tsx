@@ -537,7 +537,12 @@ export const EditorCanvas = ({
     const canvas = fabricRef.current
     if (!canvas || !initialState) return
 
+    const preservedBackground = canvas.backgroundImage
+
     canvas.loadFromJSON(initialState, () => {
+      if (preservedBackground) {
+        canvas.backgroundImage = preservedBackground
+      }
       syncOverlayObjects()
       canvas.requestRenderAll()
     })
