@@ -54,8 +54,9 @@ export const EditorCanvas = ({
   onSave,
   onClose
 }: EditorCanvasProps): JSX.Element => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const hostRef = useRef<HTMLDivElement>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
+  const domGenRef = useRef(0)
   const textRef = useRef<OverlayText | null>(null)
   const backgroundRef = useRef<fabric.Rect | null>(null)
   const linkRef = useRef({ attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 })
@@ -217,110 +218,92 @@ export const EditorCanvas = ({
     overlaySettingsRef.current = overlaySettings
   }, [overlaySettings])
 
-useEffect(() => {
-  if (!canvasRef.current || fabricRef.current) return
+  useEffect(() => {
+    const host = hostRef.current
 
-  const canvas = new fabric.Canvas(canvasRef.current, {
-    width: CANVAS_WIDTH,
-    height: CANVAS_HEIGHT,
-    backgroundColor: 'transparent',
-    preserveObjectStacking: true,
-    selection: true,
-    // Fabric v7 + HiDPI/CSS can desync pointer/controls; disabling retina scaling is the safest baseline
-    enableRetinaScaling: false
-  })
+    if (!host) return
+    if (fabricRef.current) return
 
-  // Ensure no leftover viewport transform/zoom (can happen with hot reload)
-  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
-  canvas.setZoom(1)
+    // новый “поколенческий” id для защиты от позднего dispose()
+    const myGen = ++domGenRef.current
 
-  // Force fixed dimensions for both lower/upper canvases + wrapper.
-  // This guards against global CSS (e.g. `canvas { width: 100% }`) which breaks hit-testing
-  // and makes controls appear offset from objects.
-  canvas.setDimensions({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT })
+    // гарантированно вычищаем всё, что могло остаться в host (wrapper/upper/lower)
+    host.replaceChildren()
 
-  const lower = (canvas as any).lowerCanvasEl as HTMLCanvasElement | undefined
-  const upper = (canvas as any).upperCanvasEl as HTMLCanvasElement | undefined
-  const wrapper = (canvas as any).wrapperEl as HTMLElement | undefined
-
-  const applyFixedSize = (el?: HTMLElement): void => {
-    if (!el) return
+    // создаём новый canvas элемент (не реюзаем старый)
+    const el = document.createElement('canvas')
+    el.width = CANVAS_WIDTH
+    el.height = CANVAS_HEIGHT
     el.style.width = `${CANVAS_WIDTH}px`
     el.style.height = `${CANVAS_HEIGHT}px`
-    ;(el.style as any).maxWidth = `${CANVAS_WIDTH}px`
-    ;(el.style as any).maxHeight = `${CANVAS_HEIGHT}px`
-    el.style.display = 'block'
-    // Protect from global CSS scaling/transforms
-    el.style.transform = 'none'
-    ;(el.style as any).zoom = '1'
-  }
+    host.appendChild(el)
 
-  applyFixedSize(lower)
-  applyFixedSize(upper)
+    const canvas = new fabric.Canvas(el, {
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
+      backgroundColor: 'transparent',
+      preserveObjectStacking: true,
+      selection: true,
+      enableRetinaScaling: false
+    })
 
-  if (wrapper) {
-    wrapper.style.width = `${CANVAS_WIDTH}px`
-    wrapper.style.height = `${CANVAS_HEIGHT}px`
-    wrapper.style.display = 'block'
-    // Protect from global CSS scaling/transforms
-    wrapper.style.transform = 'none'
-    ;(wrapper.style as any).zoom = '1'
-    // Improve pointer correctness (prevents browser gestures interfering with Fabric on some platforms)
-    wrapper.style.touchAction = 'none'
-  }
+    const wrapper = (canvas as any).wrapperEl as HTMLDivElement | undefined
+    if (wrapper) wrapper.style.touchAction = 'none'
 
-  // Wait one frame so DOM layout is final before calculating offsets.
-  window.requestAnimationFrame(() => {
-    canvas.calcOffset()
-    canvas.requestRenderAll()
-  })
+    textRef.current = null
+    backgroundRef.current = null
+    linkRef.current = { attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 }
 
-  fabricRef.current = canvas
 
-  return () => {
-    canvas.off()
-    const lower = (canvas as any).lowerCanvasEl as HTMLCanvasElement | undefined
-    const upper = (canvas as any).upperCanvasEl as HTMLCanvasElement | undefined
-    const wrapper = (canvas as any).wrapperEl as HTMLElement | undefined
-
-    void canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
-
-    if (upper?.parentElement) {
-      upper.parentElement.removeChild(upper)
-    }
-
-    if (wrapper?.parentElement) {
-      if (lower) {
-        wrapper.parentElement.replaceChild(lower, wrapper)
-      } else {
-        wrapper.parentElement.removeChild(wrapper)
-      }
-    }
-
-    fabricRef.current = null
-  }
-}, [])
-
-useEffect(() => {
-  const canvas = fabricRef.current
-  if (!canvas) return
-
-  const handleResize = (): void => {
-    // Canvas has fixed dimensions; on layout changes we only need to recalc offset.
-    // Do it on the next frame so DOM layout is final.
-    window.requestAnimationFrame(() => {
+    // важно: offsets после того, как DOM вставлен и отрисован
+    requestAnimationFrame(() => {
       canvas.calcOffset()
       canvas.requestRenderAll()
     })
-  }
 
-  window.addEventListener('resize', handleResize)
-  handleResize()
+    fabricRef.current = canvas
 
-  return () => {
-    window.removeEventListener('resize', handleResize)
-  }
-}, [])
+    return () => {
+      // Сразу “отвязываем” текущий инстанс из ref, чтобы новый mount мог создаться
+
+      if (fabricRef.current === canvas) fabricRef.current = null
+
+      // Снимаем все хендлеры на всякий
+      canvas.off()
+
+      // dispose асинхронный, и он может завершиться поздно.
+      // Поэтому чистим DOM ТОЛЬКО если это всё ещё наше поколение.
+      void canvas.dispose().finally(() => {
+        const stillMine = domGenRef.current === myGen
+        if (stillMine) {
+          host.replaceChildren()
+        }
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = fabricRef.current
+    const host = hostRef.current
+    if (!canvas || !host) return
+
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        canvas.calcOffset()
+        canvas.requestRenderAll()
+      })
+    })
+
+    ro.observe(host)
+
+    // и один раз сразу
+    requestAnimationFrame(() => {
+      canvas.calcOffset()
+      canvas.requestRenderAll()
+    })
+
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     const canvas = fabricRef.current
@@ -405,6 +388,16 @@ useEffect(() => {
   const syncOverlayObjects = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+
+    if (textRef.current && (textRef.current as any).canvas !== canvas) {
+      textRef.current = null
+    }
+    if (backgroundRef.current && (backgroundRef.current as any).canvas !== canvas) {
+      backgroundRef.current = null
+    }
+    if ((linkRef.current?.attached ?? false) && (!textRef.current || !backgroundRef.current)) {
+      linkRef.current = { attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 }
+    }
 
     const objects = canvas.getObjects()
     const existingText = objects.find(
@@ -947,7 +940,16 @@ useEffect(() => {
 
         <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-gray-900 to-black">
           <div className="relative shadow-2xl shadow-black ring-1 ring-white/10">
-            <canvas ref={canvasRef} />
+            <div
+              ref={hostRef}
+              className="relative"
+              style={{
+                width: CANVAS_WIDTH,
+                height: CANVAS_HEIGHT,
+                transform: 'none',
+                zoom: 1
+              }}
+            />
             <div className="pointer-events-none absolute inset-0 border border-white/5 mix-blend-overlay"></div>
           </div>
         </div>
