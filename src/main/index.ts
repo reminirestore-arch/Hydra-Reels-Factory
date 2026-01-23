@@ -25,10 +25,13 @@ const createEmptyStrategies = (): VideoFile['strategies'] => ({
   IG4: createDefaultStrategy('IG4')
 })
 
-ipcMain.handle('extract-frame', async (_event, filePath: string, strategyId?: StrategyType) => {
-  if (!filePath) throw new Error('Путь к файлу не найден')
-  return extractFrameAsDataUrl(filePath, strategyId)
-})
+ipcMain.handle(
+  'extract-frame',
+  async (_event, filePath: string, strategyId?: StrategyType, atSeconds = 0) => {
+    if (!filePath) throw new Error('Путь к файлу не найден')
+    return await extractFrameAsDataUrl(filePath, strategyId, String(atSeconds))
+  }
+)
 
 ipcMain.handle('select-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
