@@ -88,30 +88,37 @@ const hasAudioStream = (filePath: string): Promise<boolean> => {
 }
 
 export async function extractFrameAsDataUrl(
-  filePath: string,
-  strategyId?: StrategyType,
+  inputPath: string,
   previewWidth = 450,
-  previewHeight = 800
+  previewHeight = 800,
+  strategyId?: StrategyType
 ): Promise<string> {
-  const outputPath = join(tmpdir(), `frame-${Date.now()}.png`)
+  const tempPath = join(tmpdir(), `preview_${Date.now()}.jpg`)
 
-  const vf = strategyId
-    ? `${buildStrategyFilter(strategyId)},scale=${previewWidth}:${previewHeight}`
-    : `scale=${previewWidth}:${previewHeight}`
+  try {
+    const filter = strategyId
+      ? `${buildStrategyFilter(strategyId)},scale=${previewWidth}:${previewHeight}`
+      : `scale=${previewWidth}:${previewHeight}`
 
-  await new Promise<void>((resolve, reject) => {
-    ffmpeg(filePath)
-      .seekInput('0.5')
-      .frames(1)
-      .outputOptions(['-vf', vf])
-      .output(outputPath)
-      .on('end', resolve)
-      .on('error', reject)
-      .run()
-  })
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath)
+        .seekInput('0') // было 0.5
+        .videoFilters(filter)
+        .outputOptions(['-frames:v 1', '-q:v 2'])
+        .output(tempPath)
+        .on('end', () => resolve())
+        .on('error', (err) => reject(err))
+        .run()
+    })
 
-  const buffer = readFileSync(outputPath)
-  return `data:image/png;base64,${buffer.toString('base64')}`
+    const buffer = readFileSync(tempPath)
+    return `data:image/jpeg;base64,${buffer.toString('base64')}`
+  } finally {
+    // желательно: чистим временный файл
+    try {
+      require('node:fs').unlinkSync(tempPath)
+    } catch {}
+  }
 }
 
 export const generateThumbnail = async (
@@ -121,7 +128,7 @@ export const generateThumbnail = async (
 
   return new Promise((resolve) => {
     ffmpeg(filePath)
-      .seekInput('0.5')
+      .seekInput('0')
       .frames(1)
       .outputOptions(['-vf scale=360:-2'])
       .output(outputPath)

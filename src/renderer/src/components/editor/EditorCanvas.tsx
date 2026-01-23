@@ -336,7 +336,7 @@ export const EditorCanvas = ({
     }
 
     void loadFrame()
-  }, [filePath])
+  }, [filePath, strategyId])
 
   const applyOverlaySettings = useCallback((): void => {
     const canvas = fabricRef.current
