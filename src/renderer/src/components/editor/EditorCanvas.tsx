@@ -278,7 +278,25 @@ useEffect(() => {
   fabricRef.current = canvas
 
   return () => {
-    canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
+    canvas.off()
+    const lower = (canvas as any).lowerCanvasEl as HTMLCanvasElement | undefined
+    const upper = (canvas as any).upperCanvasEl as HTMLCanvasElement | undefined
+    const wrapper = (canvas as any).wrapperEl as HTMLElement | undefined
+
+    void canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
+
+    if (upper?.parentElement) {
+      upper.parentElement.removeChild(upper)
+    }
+
+    if (wrapper?.parentElement) {
+      if (lower) {
+        wrapper.parentElement.replaceChild(lower, wrapper)
+      } else {
+        wrapper.parentElement.removeChild(wrapper)
+      }
+    }
+
     fabricRef.current = null
   }
 }, [])
