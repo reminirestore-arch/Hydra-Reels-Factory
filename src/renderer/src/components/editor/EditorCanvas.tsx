@@ -433,15 +433,28 @@ export const EditorCanvas = ({
     }
 
     const objects = canvas.getObjects()
-    const existingText = objects.find(
-      (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-text'
-    )
-    const existingBackground = objects.find(
-      (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-background'
-    )
+    const existingText = objects.find((obj) => {
+      const role = (obj as { data?: { role?: string } }).data?.role
+      return (
+        role === 'overlay-text' ||
+        obj.type === 'i-text' ||
+        obj.type === 'textbox' ||
+        obj.type === 'text'
+      )
+    })
+    const existingBackground = objects.find((obj) => {
+      const role = (obj as { data?: { role?: string } }).data?.role
+      return role === 'overlay-background' || obj.type === 'rect'
+    })
 
-    if (existingText && (existingText.type === 'i-text' || existingText.type === 'textbox')) {
-      if (existingText.type === 'i-text') {
+    if (
+      existingText &&
+      (existingText.type === 'i-text' || existingText.type === 'textbox' || existingText.type === 'text')
+    ) {
+      if (!(existingText as { data?: { role?: string } }).data?.role) {
+        existingText.set({ data: { role: 'overlay-text' } })
+      }
+      if (existingText.type === 'i-text' || existingText.type === 'text') {
         const legacyText = existingText as fabric.IText
         const upgradedText = buildTextObject(legacyText.text ?? 'Текст Рилса')
         upgradedText.set({
@@ -465,6 +478,9 @@ export const EditorCanvas = ({
     }
 
     if (existingBackground && existingBackground.type === 'rect') {
+      if (!(existingBackground as { data?: { role?: string } }).data?.role) {
+        existingBackground.set({ data: { role: 'overlay-background' } })
+      }
       backgroundRef.current = existingBackground as fabric.Rect
       backgroundRef.current.set({ selectable: true, evented: true, hasControls: true })
     }
