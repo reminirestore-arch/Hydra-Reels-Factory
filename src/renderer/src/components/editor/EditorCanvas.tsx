@@ -116,6 +116,14 @@ export const EditorCanvas = ({
     text.set({ lockUniScaling: true })
   }, [])
 
+  const refreshTextLayout = useCallback((text: OverlayText): void => {
+    if ('initDimensions' in text) {
+      ;(text as fabric.Textbox).initDimensions()
+    }
+    text.set({ dirty: true })
+    text.setCoords()
+  }, [])
+
   const updateTextValueFromCanvas = useCallback((): void => {
     if (!textRef.current) return
     setTextValue(textRef.current.text ?? '')
@@ -384,7 +392,7 @@ export const EditorCanvas = ({
         textAlign: overlaySettings.text.align,
         width: overlaySettings.background.width
       })
-      textRef.current.setCoords()
+      refreshTextLayout(textRef.current)
     }
 
     if (backgroundRef.current) {
@@ -733,18 +741,14 @@ export const EditorCanvas = ({
 
     background.setCoords()
     const backgroundCenter = background.getCenterPoint()
-    const backgroundWidth = background.getScaledWidth()
-    const textWidth = text.getScaledWidth()
-    const halfSpace = Math.max(0, (backgroundWidth - textWidth) / 2)
-
-    const offset = horizontal === 'left' ? -halfSpace : horizontal === 'right' ? halfSpace : 0
 
     text.set({
-      left: backgroundCenter.x + offset,
+      left: backgroundCenter.x,
       originX: 'center',
-      textAlign: horizontal
+      textAlign: horizontal,
+      width: background.getScaledWidth()
     })
-    text.setCoords()
+    refreshTextLayout(text)
 
     clampTextToBackground()
     attachTextToBackground()
@@ -769,7 +773,7 @@ export const EditorCanvas = ({
       top: backgroundCenter.y + offset,
       originY: 'center'
     })
-    text.setCoords()
+    refreshTextLayout(text)
 
     clampTextToBackground()
     attachTextToBackground()
