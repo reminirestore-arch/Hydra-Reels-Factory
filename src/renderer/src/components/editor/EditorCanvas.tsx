@@ -217,49 +217,92 @@ export const EditorCanvas = ({
     overlaySettingsRef.current = overlaySettings
   }, [overlaySettings])
 
-  useEffect(() => {
-    if (!canvasRef.current || fabricRef.current) return
+useEffect(() => {
+  if (!canvasRef.current || fabricRef.current) return
 
-    canvasRef.current.width = CANVAS_WIDTH
-    canvasRef.current.height = CANVAS_HEIGHT
-    canvasRef.current.style.width = `${CANVAS_WIDTH}px`
-    canvasRef.current.style.height = `${CANVAS_HEIGHT}px`
+  const canvas = new fabric.Canvas(canvasRef.current, {
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    backgroundColor: 'transparent',
+    preserveObjectStacking: true,
+    selection: true,
+    // Fabric v7 + HiDPI/CSS can desync pointer/controls; disabling retina scaling is the safest baseline
+    enableRetinaScaling: false
+  })
 
-    const canvas = new fabric.Canvas(canvasRef.current, {
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
-      backgroundColor: 'transparent',
-      preserveObjectStacking: true,
-      selection: true
-    })
-    canvas.setDimensions({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, { cssOnly: true })
+  // Ensure no leftover viewport transform/zoom (can happen with hot reload)
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+  canvas.setZoom(1)
+
+  // Force fixed dimensions for both lower/upper canvases + wrapper.
+  // This guards against global CSS (e.g. `canvas { width: 100% }`) which breaks hit-testing
+  // and makes controls appear offset from objects.
+  canvas.setDimensions({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT })
+
+  const lower = (canvas as any).lowerCanvasEl as HTMLCanvasElement | undefined
+  const upper = (canvas as any).upperCanvasEl as HTMLCanvasElement | undefined
+  const wrapper = (canvas as any).wrapperEl as HTMLElement | undefined
+
+  const applyFixedSize = (el?: HTMLElement): void => {
+    if (!el) return
+    el.style.width = `${CANVAS_WIDTH}px`
+    el.style.height = `${CANVAS_HEIGHT}px`
+    ;(el.style as any).maxWidth = `${CANVAS_WIDTH}px`
+    ;(el.style as any).maxHeight = `${CANVAS_HEIGHT}px`
+    el.style.display = 'block'
+    // Protect from global CSS scaling/transforms
+    el.style.transform = 'none'
+    ;(el.style as any).zoom = '1'
+  }
+
+  applyFixedSize(lower)
+  applyFixedSize(upper)
+
+  if (wrapper) {
+    wrapper.style.width = `${CANVAS_WIDTH}px`
+    wrapper.style.height = `${CANVAS_HEIGHT}px`
+    wrapper.style.display = 'block'
+    // Protect from global CSS scaling/transforms
+    wrapper.style.transform = 'none'
+    ;(wrapper.style as any).zoom = '1'
+    // Improve pointer correctness (prevents browser gestures interfering with Fabric on some platforms)
+    wrapper.style.touchAction = 'none'
+  }
+
+  // Wait one frame so DOM layout is final before calculating offsets.
+  window.requestAnimationFrame(() => {
     canvas.calcOffset()
+    canvas.requestRenderAll()
+  })
 
-    fabricRef.current = canvas
+  fabricRef.current = canvas
 
-    return () => {
-      canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
-      fabricRef.current = null
-    }
-  }, [])
+  return () => {
+    canvas.dispose().catch((e) => console.error('Ошибка очистки канваса:', e))
+    fabricRef.current = null
+  }
+}, [])
 
-  useEffect(() => {
-    const canvas = fabricRef.current
-    if (!canvas) return
+useEffect(() => {
+  const canvas = fabricRef.current
+  if (!canvas) return
 
-    const handleResize = (): void => {
-      canvas.setDimensions({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, { cssOnly: true })
+  const handleResize = (): void => {
+    // Canvas has fixed dimensions; on layout changes we only need to recalc offset.
+    // Do it on the next frame so DOM layout is final.
+    window.requestAnimationFrame(() => {
       canvas.calcOffset()
       canvas.requestRenderAll()
-    }
+    })
+  }
 
-    window.addEventListener('resize', handleResize)
-    handleResize()
+  window.addEventListener('resize', handleResize)
+  handleResize()
 
-    return () => {
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [])
+  return () => {
+    window.removeEventListener('resize', handleResize)
+  }
+}, [])
 
   useEffect(() => {
     const canvas = fabricRef.current
@@ -278,6 +321,8 @@ export const EditorCanvas = ({
         img.set({
           left: CANVAS_WIDTH / 2,
           top: CANVAS_HEIGHT / 2,
+          originX: 'center',
+          originY: 'center',
           scaleX: scale,
           scaleY: scale
         })
@@ -397,6 +442,7 @@ export const EditorCanvas = ({
         opacity: overlaySettings.background.opacity,
         rx: radius,
         ry: radius,
+        evented: true,
         selectable: true,
         hasControls: true,
         lockRotation: false,
@@ -833,7 +879,9 @@ export const EditorCanvas = ({
                           ? backgroundRef.current
                           : textRef.current
                       if (target) {
+                        target.setCoords()
                         fabricRef.current?.setActiveObject(target)
+                        fabricRef.current?.calcOffset()
                         fabricRef.current?.requestRenderAll()
                       }
                     }}
@@ -856,7 +904,9 @@ export const EditorCanvas = ({
                           type="button"
                           onClick={() => {
                             if (child.role === 'overlay-text' && textRef.current) {
+                              textRef.current.setCoords()
                               fabricRef.current?.setActiveObject(textRef.current)
+                              fabricRef.current?.calcOffset()
                               fabricRef.current?.requestRenderAll()
                             }
                           }}
