@@ -8,7 +8,7 @@ declare global {
       selectFolder: () => Promise<string | null>
       selectOutputFolder: () => Promise<string | null>
       scanFolder: (path: string) => Promise<VideoFile[]>
-      extractFrame: (filePath: string) => Promise<string>
+      extractFrame: (filePath: string, strategyId: StrategyType) => Promise<string>
       saveOverlay: (dataUrl: string) => Promise<string>
       renderStrategy: (payload: {
         inputPath: string

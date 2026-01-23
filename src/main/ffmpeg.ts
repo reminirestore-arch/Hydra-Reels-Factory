@@ -5,6 +5,9 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import { join } from 'path'
+import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'))
@@ -84,32 +87,31 @@ const hasAudioStream = (filePath: string): Promise<boolean> => {
   })
 }
 
-export const extractFrameAsDataUrl = async (filePath: string): Promise<string> => {
-  const outputPath = createTempPath('frame', 'jpg')
+export async function extractFrameAsDataUrl(
+  filePath: string,
+  strategyId?: StrategyType,
+  previewWidth = 450,
+  previewHeight = 800
+): Promise<string> {
+  const outputPath = join(tmpdir(), `frame-${Date.now()}.png`)
 
-  return new Promise((resolve) => {
+  const vf = strategyId
+    ? `${buildStrategyFilter(strategyId)},scale=${previewWidth}:${previewHeight}`
+    : `scale=${previewWidth}:${previewHeight}`
+
+  await new Promise<void>((resolve, reject) => {
     ffmpeg(filePath)
       .seekInput('0.5')
       .frames(1)
+      .outputOptions(['-vf', vf])
       .output(outputPath)
-      .on('end', async () => {
-        try {
-          await waitForFile(outputPath)
-          const imgBuffer = fs.readFileSync(outputPath)
-          const base64 = `data:image/jpeg;base64,${imgBuffer.toString('base64')}`
-          await removeTempFile(outputPath)
-          resolve(base64)
-        } catch (error) {
-          console.error('Ошибка чтения превью:', error)
-          resolve('')
-        }
-      })
-      .on('error', (err) => {
-        console.error('FFmpeg Error:', err)
-        resolve('')
-      })
+      .on('end', resolve)
+      .on('error', reject)
       .run()
   })
+
+  const buffer = readFileSync(outputPath)
+  return `data:image/png;base64,${buffer.toString('base64')}`
 }
 
 export const generateThumbnail = async (
@@ -221,9 +223,35 @@ export const renderStrategyVideo = async (options: {
       if (overlayPath) {
         command.input(overlayPath)
         const overlayEnd = overlayStart + overlayDuration
-        filterChain.push(`overlay=0:0:enable='between(t,${overlayStart},${overlayEnd})'`)
-        // complexFilter корректно обрабатывает >1 входа (видео + оверлей)
-        command.complexFilter(filterChain.join(','))
+
+        const videoFilter = filterChain.join(',') // то, что уже собрал до overlay
+        const graph = [
+          `[0:v]${videoFilter}[v0]`,
+          `[1:v]format=rgba[ov0]`,
+          `[ov0][v0]scale2ref=w=iw:h=ih[ov][v1]`,
+          `[v1][ov]overlay=0:0:enable='between(t,${overlayStart},${overlayEnd})'[vout]`
+        ].join(';')
+
+        command.complexFilter(graph)
+
+        const outputOptions = [
+          '-map_metadata',
+          '-1',
+          '-map',
+          '[vout]',
+          ...(includeAudio ? ['-map', '0:a?'] : ['-an']),
+          '-b:v',
+          '12M',
+          '-c:v',
+          codec,
+          ...(includeAudio ? ['-b:a', '256k', '-c:a', 'aac'] : []),
+          '-movflags',
+          '+faststart',
+          '-pix_fmt',
+          'yuv420p'
+        ]
+
+        command.outputOptions(outputOptions)
       } else {
         // videoFilters подходит только для одного входа
         command.videoFilters(filterChain.join(','))

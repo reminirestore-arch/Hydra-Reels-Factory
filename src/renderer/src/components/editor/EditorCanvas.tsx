@@ -311,7 +311,7 @@ export const EditorCanvas = ({
 
     const loadFrame = async (): Promise<void> => {
       try {
-        const imageUrl = await window.api.extractFrame(filePath)
+        const imageUrl = await window.api.extractFrame(filePath, strategyId)
         if (!imageUrl) return
 
         const img = await fabric.FabricImage.fromURL(imageUrl)

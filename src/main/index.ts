@@ -17,6 +17,7 @@ import {
 import { createDefaultStrategy } from '../shared/defaults'
 import { StrategyType, VideoFile } from '../shared/types'
 
+
 const createEmptyStrategies = (): VideoFile['strategies'] => ({
   IG1: createDefaultStrategy('IG1'),
   IG2: createDefaultStrategy('IG2'),
@@ -24,9 +25,9 @@ const createEmptyStrategies = (): VideoFile['strategies'] => ({
   IG4: createDefaultStrategy('IG4')
 })
 
-ipcMain.handle('extract-frame', async (_, filePath: string): Promise<string> => {
+ipcMain.handle('extract-frame', async (_event, filePath: string, strategyId?: StrategyType) => {
   if (!filePath) throw new Error('Путь к файлу не найден')
-  return extractFrameAsDataUrl(filePath)
+  return extractFrameAsDataUrl(filePath, strategyId)
 })
 
 ipcMain.handle('select-folder', async () => {
