@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg'
-import type { StrategyType } from '../shared/types'
+import type { StrategyType } from '@shared/types'
 import ffmpegPath from 'ffmpeg-static'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -7,7 +7,6 @@ import * as path from 'path'
 import * as crypto from 'crypto'
 import { join } from 'path'
 import { tmpdir } from 'node:os'
-import { readFileSync } from 'node:fs'
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'))
@@ -87,6 +86,7 @@ const hasAudioStream = (filePath: string): Promise<boolean> => {
   })
 }
 
+// === ИСПРАВЛЕННАЯ ФУНКЦИЯ ===
 export async function extractFrameAsDataUrl(
   inputPath: string,
   previewWidth = 450,
@@ -94,7 +94,8 @@ export async function extractFrameAsDataUrl(
   strategyId?: StrategyType,
   atSeconds = 0
 ): Promise<string> {
-  const tempPath = join(tmpdir(), `preview_${Date.now()}.jpg`)
+  // Используем нашу функцию createTempPath, чтобы файл попал в общую кучу и потом удалился
+  const tempPath = createTempPath('preview', 'jpg')
 
   try {
     const filter = strategyId
@@ -103,25 +104,32 @@ export async function extractFrameAsDataUrl(
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)
-        // NOTE:
-        // - seekInput() places -ss before input (fast seek). For 0 it's exact enough.
-        // - We keep it configurable so the renderer can preview a specific moment if needed.
         .seekInput(String(atSeconds))
         .videoFilters(filter)
         .outputOptions(['-frames:v 1', '-q:v 2'])
         .output(tempPath)
-        .on('end', () => resolve())
+        .on('end', async () => {
+          // !!! ВАЖНО: Ждем, пока файл реально появится на диске
+          try {
+            await waitForFile(tempPath)
+            resolve()
+          } catch (e) {
+            reject(e)
+          }
+        })
         .on('error', (err) => reject(err))
         .run()
     })
 
-    const buffer = readFileSync(tempPath)
+    const buffer = fs.readFileSync(tempPath)
+    // Сразу удаляем после чтения
+    await removeTempFile(tempPath)
     return `data:image/jpeg;base64,${buffer.toString('base64')}`
-  } finally {
-    // желательно: чистим временный файл
-    try {
-      require('node:fs').unlinkSync(tempPath)
-    } catch {}
+  } catch (error) {
+    console.error('Extract frame error:', error)
+    // Гарантируем очистку в случае ошибки
+    void removeTempFile(tempPath)
+    return ''
   }
 }
 

@@ -38,7 +38,9 @@ const extractFrameHandler = async (
 }
 
 ipcMain.handle('extractFrame', extractFrameHandler)
-ipcMain.handle('extract-frame', extractFrameHandler)
+ipcMain.handle('extract-frame', (_, path, strategyId, atSeconds) =>
+  extractFrameAsDataUrl(path, 450, 800, strategyId, atSeconds)
+)
 
 ipcMain.handle('select-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
