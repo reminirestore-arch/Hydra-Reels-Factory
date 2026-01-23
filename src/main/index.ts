@@ -25,13 +25,20 @@ const createEmptyStrategies = (): VideoFile['strategies'] => ({
   IG4: createDefaultStrategy('IG4')
 })
 
-ipcMain.handle(
-  'extract-frame',
-  async (_event, filePath: string, strategyId?: StrategyType, atSeconds = 0) => {
-    if (!filePath) throw new Error('Путь к файлу не найден')
-    return await extractFrameAsDataUrl(filePath, strategyId, String(atSeconds))
-  }
-)
+// IMPORTANT: keep channel name in sync with preload/renderer.
+// Support both the new camelCase channel and the legacy kebab-case channel.
+const extractFrameHandler = async (
+  _event: Electron.IpcMainInvokeEvent,
+  filePath: string,
+  strategyId?: StrategyType,
+  atSeconds = 0
+) => {
+  if (!filePath) throw new Error('Путь к файлу не найден')
+  return await extractFrameAsDataUrl(filePath, CANVAS_WIDTH, CANVAS_HEIGHT, strategyId, atSeconds)
+}
+
+ipcMain.handle('extractFrame', extractFrameHandler)
+ipcMain.handle('extract-frame', extractFrameHandler)
 
 ipcMain.handle('select-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({

@@ -91,7 +91,8 @@ export async function extractFrameAsDataUrl(
   inputPath: string,
   previewWidth = 450,
   previewHeight = 800,
-  strategyId?: StrategyType
+  strategyId?: StrategyType,
+  atSeconds = 0
 ): Promise<string> {
   const tempPath = join(tmpdir(), `preview_${Date.now()}.jpg`)
 
@@ -102,7 +103,10 @@ export async function extractFrameAsDataUrl(
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)
-        .seekInput('0') // было 0.5
+        // NOTE:
+        // - seekInput() places -ss before input (fast seek). For 0 it's exact enough.
+        // - We keep it configurable so the renderer can preview a specific moment if needed.
+        .seekInput(String(atSeconds))
         .videoFilters(filter)
         .outputOptions(['-frames:v 1', '-q:v 2'])
         .output(tempPath)

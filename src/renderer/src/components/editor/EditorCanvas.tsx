@@ -320,20 +320,16 @@ export const EditorCanvas = ({
     return () => ro.disconnect()
   }, [])
 
-  // ---------- Load preview frame (IMPORTANT: by overlay startTime) ----------
+  // ---------- Load preview frame ----------
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !filePath) return
 
     let cancelled = false
 
-    const safeTime = (v: unknown): number => {
-      const n = typeof v === 'number' ? v : Number(v)
-      return Number.isFinite(n) && n >= 0 ? n : 0
-    }
-
-    // ключевая правка: кадр берём на момент появления оверлея, а не всегда t=0
-    const atSeconds = safeTime(overlaySettings.timing.startTime)
+    // For now we always preview the very first frame (t=0).
+    // If later you add a playhead/timeline, you can pass that here instead.
+    const atSeconds = 0
 
     // маленький debounce, чтобы не спамить ffmpeg при перетаскивании слайдера
     const timer = window.setTimeout(() => {
@@ -368,7 +364,7 @@ export const EditorCanvas = ({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [filePath, strategyId, overlaySettings.timing.startTime])
+  }, [filePath, strategyId])
 
   // ---------- Apply overlay settings ----------
   const applyOverlaySettings = useCallback((): void => {
