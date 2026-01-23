@@ -706,18 +706,20 @@ export const EditorCanvas = ({
     const background = backgroundRef.current
     const text = textRef.current
 
-    const backgroundWidth = (background.width ?? 0) * (background.scaleX ?? 1)
+    background.setCoords()
+    const backgroundCenter = background.getCenterPoint()
+    const backgroundWidth = background.getScaledWidth()
     const textWidth = text.getScaledWidth()
     const halfSpace = Math.max(0, (backgroundWidth - textWidth) / 2)
 
-    const centerX = background.left ?? CANVAS_WIDTH / 2
     const offset = horizontal === 'left' ? -halfSpace : horizontal === 'right' ? halfSpace : 0
 
     text.set({
-      left: centerX + offset,
+      left: backgroundCenter.x + offset,
       originX: 'center',
       textAlign: horizontal
     })
+    text.setCoords()
 
     clampTextToBackground()
     attachTextToBackground()
@@ -730,17 +732,19 @@ export const EditorCanvas = ({
     const background = backgroundRef.current
     const text = textRef.current
 
-    const backgroundHeight = (background.height ?? 0) * (background.scaleY ?? 1)
+    background.setCoords()
+    const backgroundCenter = background.getCenterPoint()
+    const backgroundHeight = background.getScaledHeight()
     const textHeight = text.getScaledHeight()
     const halfSpace = Math.max(0, (backgroundHeight - textHeight) / 2)
 
-    const centerY = background.top ?? CANVAS_HEIGHT / 2
     const offset = vertical === 'top' ? -halfSpace : vertical === 'bottom' ? halfSpace : 0
 
     text.set({
-      top: centerY + offset,
+      top: backgroundCenter.y + offset,
       originY: 'center'
     })
+    text.setCoords()
 
     clampTextToBackground()
     attachTextToBackground()
