@@ -318,9 +318,9 @@ export const EditorCanvas = ({
     },
     [
       attachTextToBackground,
+      clampTextToBackground,
       buildBackgroundObject,
       buildTextObject,
-      clampTextToBackground,
       configureTextControls
     ]
   )
@@ -450,10 +450,12 @@ export const EditorCanvas = ({
       if (fabricRef.current === canvas) fabricRef.current = null
       canvas.off()
 
-      void canvas.dispose().finally(() => {
-        const stillMine = domGenRef.current === myGen
+      const stillMine = domGenRef.current === myGen
+      try {
+        canvas.dispose()
+      } finally {
         if (stillMine) host.replaceChildren()
-      })
+      }
     }
   }, [])
 
