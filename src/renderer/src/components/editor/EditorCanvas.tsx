@@ -232,34 +232,6 @@ export const EditorCanvas = ({
     overlaySettings.background.width
   ])
 
-  const createOverlayBlock = useCallback(
-    (blockId: number, textValueOverride?: string): OverlayBlock => {
-      const background = buildBackgroundObject()
-      const text = buildTextObject(textValueOverride)
-      background.set({ data: { role: 'overlay-background', blockId } })
-      text.set({ data: { role: 'overlay-text', blockId } })
-      configureTextControls(text)
-
-      const canvas = fabricRef.current
-      if (canvas) {
-        canvas.add(background)
-        canvas.add(text)
-        canvas.bringObjectToFront(text)
-      }
-
-      attachTextToBackground(background, text)
-      clampTextToBackground(background, text)
-      return { id: blockId, background, text }
-    },
-    [
-      attachTextToBackground,
-      buildBackgroundObject,
-      buildTextObject,
-      clampTextToBackground,
-      configureTextControls
-    ]
-  )
-
   const clampTextToBackground = useCallback((background: fabric.Rect, text: OverlayText): void => {
     if (!background || !text) return
 
@@ -323,6 +295,34 @@ export const EditorCanvas = ({
       updateLinkOffsets(background, text)
     },
     [updateLinkOffsets]
+  )
+
+  const createOverlayBlock = useCallback(
+    (blockId: number, textValueOverride?: string): OverlayBlock => {
+      const background = buildBackgroundObject()
+      const text = buildTextObject(textValueOverride)
+      background.set({ data: { role: 'overlay-background', blockId } })
+      text.set({ data: { role: 'overlay-text', blockId } })
+      configureTextControls(text)
+
+      const canvas = fabricRef.current
+      if (canvas) {
+        canvas.add(background)
+        canvas.add(text)
+        canvas.bringObjectToFront(text)
+      }
+
+      attachTextToBackground(background, text)
+      clampTextToBackground(background, text)
+      return { id: blockId, background, text }
+    },
+    [
+      attachTextToBackground,
+      buildBackgroundObject,
+      buildTextObject,
+      clampTextToBackground,
+      configureTextControls
+    ]
   )
 
   const syncTextWithBackground = useCallback(
