@@ -145,6 +145,7 @@ export const EditorCanvas = ({
     if (!canvas || !frame) return
     if (canvas.backgroundImage !== frame) {
       canvas.backgroundImage = frame
+      canvas.requestRenderAll()
     }
   }, [])
 
@@ -228,6 +229,16 @@ export const EditorCanvas = ({
     linkRef.current.offsetX = localX / (background.scaleX ?? 1)
     linkRef.current.offsetY = localY / (background.scaleY ?? 1)
     linkRef.current.rotationOffset = (text.angle ?? 0) - (background.angle ?? 0)
+
+    const anyText = text as any
+    anyText.data = {
+      ...(anyText.data ?? {}),
+      link: {
+        offsetX: linkRef.current.offsetX,
+        offsetY: linkRef.current.offsetY,
+        rotationOffset: linkRef.current.rotationOffset
+      }
+    }
   }, [])
 
   const attachTextToBackground = useCallback((): void => {
@@ -269,6 +280,34 @@ export const EditorCanvas = ({
     })
     text.setCoords()
   }, [])
+
+  const restoreLinkFromText = useCallback((): boolean => {
+    if (!backgroundRef.current || !textRef.current) return false
+
+    const link = (textRef.current as any).data?.link as
+      | { offsetX?: number; offsetY?: number; rotationOffset?: number }
+      | undefined
+
+    if (
+      typeof link?.offsetX === 'number' &&
+      Number.isFinite(link.offsetX) &&
+      typeof link?.offsetY === 'number' &&
+      Number.isFinite(link.offsetY) &&
+      typeof link?.rotationOffset === 'number' &&
+      Number.isFinite(link.rotationOffset)
+    ) {
+      linkRef.current = {
+        attached: true,
+        offsetX: link.offsetX,
+        offsetY: link.offsetY,
+        rotationOffset: link.rotationOffset
+      }
+      syncTextWithBackground()
+      return true
+    }
+
+    return false
+  }, [syncTextWithBackground])
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings
@@ -549,7 +588,10 @@ export const EditorCanvas = ({
       canvas.bringObjectToFront(textRef.current)
     }
 
-    attachTextToBackground()
+    const restoredLink = restoreLinkFromText()
+    if (!restoredLink) {
+      attachTextToBackground()
+    }
     applyOverlaySettings()
     ensureFrameImage()
     canvas.requestRenderAll()
@@ -578,7 +620,8 @@ export const EditorCanvas = ({
     buildTextObject,
     configureTextControls,
     ensureFrameImage,
-    overlaySettings
+    overlaySettings,
+    restoreLinkFromText
   ])
 
   useEffect(() => {
