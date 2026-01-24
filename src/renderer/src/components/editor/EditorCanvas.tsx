@@ -88,6 +88,7 @@ export const EditorCanvas = ({
 
   const textRef = useRef<OverlayText | null>(null)
   const backgroundRef = useRef<fabric.Rect | null>(null)
+  const frameImageRef = useRef<fabric.FabricImage | null>(null)
   const linkRef = useRef({ attached: false, offsetX: 0, offsetY: 0, rotationOffset: 0 })
 
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() =>
@@ -136,6 +137,15 @@ export const EditorCanvas = ({
   const updateTextValueFromCanvas = useCallback((): void => {
     if (!textRef.current) return
     setTextValue(textRef.current.text ?? '')
+  }, [])
+
+  const ensureFrameImage = useCallback((): void => {
+    const canvas = fabricRef.current
+    const frame = frameImageRef.current
+    if (!canvas || !frame) return
+    if (canvas.backgroundImage !== frame) {
+      canvas.backgroundImage = frame
+    }
   }, [])
 
   const buildTextObject = useCallback(
@@ -363,6 +373,7 @@ export const EditorCanvas = ({
           scaleY: scale
         })
 
+        frameImageRef.current = img
         canvas.backgroundImage = img
         canvas.requestRenderAll()
       } catch (err) {
@@ -540,6 +551,7 @@ export const EditorCanvas = ({
 
     attachTextToBackground()
     applyOverlaySettings()
+    ensureFrameImage()
     canvas.requestRenderAll()
 
     const elements: CanvasElementNode[] = [{ id: 'frame', label: 'Кадр видео', role: 'frame' }]
@@ -565,6 +577,7 @@ export const EditorCanvas = ({
     attachTextToBackground,
     buildTextObject,
     configureTextControls,
+    ensureFrameImage,
     overlaySettings
   ])
 
@@ -576,9 +589,10 @@ export const EditorCanvas = ({
       // важное место: гарантируем роли, иначе дальше любая логика будет “плыть”
       ensureRolesOnObjects(canvas)
       syncOverlayObjects()
+      ensureFrameImage()
       canvas.requestRenderAll()
     })
-  }, [initialState, syncOverlayObjects])
+  }, [ensureFrameImage, initialState, syncOverlayObjects])
 
   useEffect(() => {
     const canvas = fabricRef.current
@@ -755,22 +769,24 @@ export const EditorCanvas = ({
     background.setCoords()
     text.setCoords()
 
-    const bgRect = background.getBoundingRect(true, true)
-    const tRect = text.getBoundingRect(true, true)
+    const backgroundCenter = background.getCenterPoint()
+    const scaledBackgroundWidth = background.getScaledWidth()
+    const scaleX = text.scaleX ?? 1
+    const nextWidth =
+      Number.isFinite(scaledBackgroundWidth) && scaleX !== 0
+        ? scaledBackgroundWidth / scaleX
+        : text.width
 
-    const centerX = bgRect.left + bgRect.width / 2
-    const targetX =
-      horizontal === 'left'
-        ? bgRect.left + tRect.width / 2
-        : horizontal === 'right'
-          ? bgRect.left + bgRect.width - tRect.width / 2
-          : centerX
+    if (nextWidth) {
+      text.set({ width: nextWidth })
+    }
 
-    text.set({ left: targetX, originX: 'center', textAlign: horizontal })
+    text.set({ left: backgroundCenter.x, originX: 'center', textAlign: horizontal })
     text.setCoords()
 
     clampTextToBackground()
     attachTextToBackground()
+    ensureFrameImage()
     canvas.requestRenderAll()
   }
 
@@ -801,6 +817,7 @@ export const EditorCanvas = ({
 
     clampTextToBackground()
     attachTextToBackground()
+    ensureFrameImage()
     canvas.requestRenderAll()
   }
 
