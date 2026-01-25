@@ -25,6 +25,7 @@ export function Dashboard(): JSX.Element {
     progress,
     stopRequested,
     statusByFileId,
+    logs,
     actions: processingActions
   } = useProcessingStore()
 
@@ -220,6 +221,29 @@ export function Dashboard(): JSX.Element {
           </div>
         </div>
       </div>
+
+        {(isRendering || logs.length > 0) && (
+          <Card className="mt-4">
+            <div className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-default-500">FFmpeg logs</div>
+                <Button size="sm" variant="light" onPress={() => processingActions.clearLogs()}>
+                    Очистить
+                  </Button>
+              </div>
+
+              <ScrollShadow className="max-h-56 text-[11px] font-mono whitespace-pre-wrap">
+                {logs.slice(-200).map((e, i) => (
+                  <div key={i}>
+                    [{new Date(e.ts).toLocaleTimeString()}] {e.level}
+                    {e.filename ? ` ${e.filename}` : ''} {e.strategyId ? ` ${e.strategyId}` : ''} — {e.line}
+                  </div>
+                ))}
+              </ScrollShadow>
+            </div>
+          </Card>
+        )}
+
 
       <div
         className={`flex-1 relative flex flex-col bg-black/90 ${isRendering ? 'pointer-events-none opacity-60' : ''}`}

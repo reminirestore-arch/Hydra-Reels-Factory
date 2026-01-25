@@ -1,9 +1,9 @@
-import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { Api } from './api/types'
+import type { Api } from '@shared/ipc/contracts'
 
 declare global {
   interface Window {
-    electron: ElectronAPI
     api: Api
   }
 }
+
+export {}

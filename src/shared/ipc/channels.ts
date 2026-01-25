@@ -5,7 +5,8 @@ export const IPC = {
   ScanFolder: 'fs:scanFolder',
   ExtractFrame: 'ffmpeg:extractFrame',
   SaveOverlay: 'overlay:saveOverlay',
-  RenderStrategy: 'ffmpeg:renderStrategy'
+  RenderStrategy: 'ffmpeg:renderStrategy',
+  FfmpegLog: 'ffmpeg:log'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

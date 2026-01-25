@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { apiClient } from '../../../shared/api/apiClient'
 import { useFilesStore } from '../../files/model/filesStore'
 import type { StrategyType } from '@shared/types'
+import type { FfmpegLogEvent } from '@shared/ipc/contracts'
 
 type Progress = { completed: number; total: number }
 
@@ -16,12 +17,17 @@ type ProcessingState = {
 
   statusByFileId: Record<string, FileProcessingStatus>
 
+  logs: FfmpegLogEvent[]
+  maxLogs: number
+
   actions: {
     renderAll: () => Promise<void>
     stop: () => void
     reset: () => void
     setFileStatus: (fileId: string, status: FileProcessingStatus) => void
     clearStatuses: () => void
+    clearLogs: () => void
+    pushLog: (e: FfmpegLogEvent) => void
   }
 }
 
@@ -39,6 +45,9 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
 
   statusByFileId: {},
 
+  logs: [],
+  maxLogs: 600,
+
   actions: {
     reset: () =>
       set({
@@ -47,10 +56,19 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         error: null,
         progress: { completed: 0, total: 0 },
         stopRequested: false,
-        statusByFileId: {}
+        statusByFileId: {},
+        logs: []
       }),
 
     clearStatuses: () => set({ statusByFileId: {} }),
+    clearLogs: () => set({ logs: [] }),
+
+    pushLog: (e) =>
+      set((s) => {
+        const next = [...s.logs, e]
+        const overflow = next.length - s.maxLogs
+        return { logs: overflow > 0 ? next.slice(overflow) : next }
+      }),
 
     setFileStatus: (fileId, status) =>
       set((s) => ({
@@ -71,7 +89,6 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         return
       }
 
-      // total считается динамически, а не files.length * 4
       const total = files.reduce((acc, file) => acc + Object.values(file.strategies).length, 0)
 
       set({
@@ -81,6 +98,9 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         progress: { completed: 0, total },
         stopRequested: false
       })
+
+      // subscribe to ffmpeg logs
+      const unsubscribe = apiClient.onFfmpegLog((e) => get().actions.pushLog(e))
 
       let completed = 0
 
@@ -103,7 +123,9 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
                 overlayPath: strategy.overlayPath,
                 overlayStart: strategy.overlaySettings.timing.startTime,
                 overlayDuration: strategy.overlaySettings.timing.duration,
-                strategyId: strategy.id
+                strategyId: strategy.id,
+                fileId: file.id,
+                filename: file.filename
               })
 
               if (!ok) throw new Error('Render failed')
@@ -112,10 +134,8 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
               set({ progress: { completed, total } })
             }
 
-            // если не остановили — done, если остановили — idle
             get().actions.setFileStatus(file.id, get().stopRequested ? 'idle' : 'done')
           } catch (e) {
-            // ошибка на конкретном файле → помечаем error, но продолжаем
             console.error('Render file failed:', file.filename, e)
             get().actions.setFileStatus(file.id, 'error')
           }
@@ -124,6 +144,8 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         set({ isRendering: false, lastResult: !get().stopRequested })
       } catch (e) {
         set({ isRendering: false, error: String(e), lastResult: false })
+      } finally {
+        unsubscribe()
       }
     }
   }

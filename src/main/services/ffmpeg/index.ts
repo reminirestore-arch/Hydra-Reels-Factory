@@ -98,6 +98,8 @@ export const renderStrategyVideo = async (options: {
   overlayStart?: number
   overlayDuration?: number
   strategyId: StrategyType
+  onLog?: (line: string) => void
+  onProgress?: (line: string) => void
 }): Promise<void> => {
   const {
     inputPath,
@@ -105,9 +107,13 @@ export const renderStrategyVideo = async (options: {
     overlayPath,
     overlayStart = 0,
     overlayDuration = 5,
-    strategyId
+    strategyId,
+    onLog,
+    onProgress
   } = options
+
   const includeAudio = await hasAudioStream(inputPath)
+  const durationSeconds = await getVideoDuration(inputPath)
 
   const runWithProfile = (
     profile: {
@@ -121,64 +127,63 @@ export const renderStrategyVideo = async (options: {
   ): Promise<void> => {
     return new Promise((resolve, reject) => {
       const command = ffmpeg(inputPath)
-      const videoFilter = buildStrategyFilter(strategyId)
-      const filterChain: string[] = [videoFilter]
+
+      const videoFilter = buildStrategyFilter(strategyId, durationSeconds)
 
       if (overlayPath) {
         command.input(overlayPath)
         const overlayEnd = overlayStart + overlayDuration
 
-        const vf = filterChain.join(',')
         const graph = [
-          `[0:v]${vf}[v0]`,
+          `[0:v]${videoFilter}[v0]`,
           `[1:v]format=rgba[ov0]`,
           `[ov0][v0]scale2ref=w=iw:h=ih[ov][v1]`,
           `[v1][ov]overlay=0:0:enable='between(t,${overlayStart},${overlayEnd})'[vout]`
         ].join(';')
 
         command.complexFilter(graph)
-
-        const outputOptions = [
-          '-map_metadata',
-          '-1',
-          '-map',
-          '[vout]',
-          ...(includeAudio ? ['-map', '0:a?'] : ['-an']),
-          '-b:v',
-          profile.videoBitrate,
-          '-c:v',
-          profile.videoCodec,
-          ...(includeAudio ? ['-b:a', profile.audioBitrate, '-c:a', 'aac'] : []),
-          '-movflags',
-          profile.movFlags,
-          '-pix_fmt',
-          profile.pixelFormat
-        ]
-
-        command.outputOptions(outputOptions)
       } else {
-        command.videoFilters(filterChain.join(','))
+        command.videoFilters(videoFilter)
       }
 
       if (includeAudio && audioFilter) {
         command.audioFilters(audioFilter)
       }
 
-      const baseOutputOptions = [
+      const outputOptions = [
         '-map_metadata',
         '-1',
+        ...(overlayPath ? ['-map', '[vout]'] : []),
+        ...(overlayPath ? (includeAudio ? ['-map', '0:a?'] : ['-an']) : []),
+
         '-b:v',
         profile.videoBitrate,
         '-c:v',
-        profile.videoCodec
+        profile.videoCodec,
+        '-movflags',
+        profile.movFlags,
+        '-pix_fmt',
+        profile.pixelFormat
       ]
 
-      if (includeAudio) baseOutputOptions.push('-b:a', profile.audioBitrate, '-c:a', 'aac')
-      else baseOutputOptions.push('-an')
+      if (!overlayPath) {
+        // no overlay: rely on default mapping. Still keep audio selection consistent.
+        if (includeAudio) outputOptions.push('-b:a', profile.audioBitrate, '-c:a', 'aac')
+        else outputOptions.push('-an')
+      } else {
+        if (includeAudio) outputOptions.push('-b:a', profile.audioBitrate, '-c:a', 'aac')
+      }
 
       command
-        .outputOptions(baseOutputOptions)
-        .on('stderr', (line) => console.log('FFmpeg Stderr:', line))
+        .outputOptions(outputOptions)
+        .on('stderr', (line) => {
+          onLog?.(line)
+        })
+        .on('progress', (p) => {
+          // p.timemark e.g. '00:00:03.12'
+          const msg = p?.timemark ? `time=${p.timemark}` : JSON.stringify(p)
+          onProgress?.(msg)
+        })
         .on('error', (err) => reject(err))
         .on('end', () => resolve())
         .save(outputPath)
@@ -191,8 +196,9 @@ export const renderStrategyVideo = async (options: {
   try {
     await runWithProfile(profile, audioFilter)
   } catch (error) {
-    // если отвалились аудио-фильтры — ретраим без них (как раньше)
-    const message = String(error)
+    const message = error instanceof Error ? error.message : String(error)
+
+    // audio filter fallback
     if (
       includeAudio &&
       audioFilter &&
@@ -200,14 +206,14 @@ export const renderStrategyVideo = async (options: {
         message.includes('Error while filtering') ||
         message.includes('matches no streams'))
     ) {
-      console.warn('Audio filter failed, retrying without audio filters...')
+      onLog?.('Audio filter failed, retrying without audio filters...')
       await runWithProfile(profile, '')
       return
     }
 
-    // если профиль был hardware и он упал — fallback на libx264 (на всякий)
+    // encoder fallback
     if (profile.videoCodec !== 'libx264') {
-      console.warn(`Encoder ${profile.videoCodec} failed, retrying with libx264...`)
+      onLog?.(`Encoder ${profile.videoCodec} failed, retrying with libx264...`)
       await runWithProfile({ ...profile, videoCodec: 'libx264' }, audioFilter)
       return
     }
@@ -215,4 +221,3 @@ export const renderStrategyVideo = async (options: {
     throw error
   }
 }
-

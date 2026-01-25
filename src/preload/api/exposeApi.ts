@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc/channels'
-import type { Api } from '@shared/ipc/contracts'
+import type { Api, FfmpegLogEvent } from '@shared/ipc/contracts'
 
 const api: Api = {
   selectFolder: () => ipcRenderer.invoke(IPC.SelectFolder),
@@ -9,7 +9,13 @@ const api: Api = {
   extractFrame: (path, strategyId, atSeconds) =>
     ipcRenderer.invoke(IPC.ExtractFrame, { path, strategyId, atSeconds }),
   saveOverlay: (dataUrl) => ipcRenderer.invoke(IPC.SaveOverlay, { dataUrl }),
-  renderStrategy: (payload) => ipcRenderer.invoke(IPC.RenderStrategy, payload)
+  renderStrategy: (payload) => ipcRenderer.invoke(IPC.RenderStrategy, payload),
+
+  onFfmpegLog: (handler) => {
+    const listener = (_event: unknown, payload: FfmpegLogEvent) => handler(payload)
+    ipcRenderer.on(IPC.FfmpegLog, listener)
+    return () => ipcRenderer.removeListener(IPC.FfmpegLog, listener)
+  }
 }
 
 export function exposeApi(): void {
