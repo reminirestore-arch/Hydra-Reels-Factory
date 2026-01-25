@@ -58,7 +58,11 @@ const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object 
 
 const cloneCanvasState = (state: object): object => {
   if (typeof structuredClone === 'function') {
-    return structuredClone(state)
+    try {
+      return structuredClone(state)
+    } catch (error) {
+      console.warn('Не удалось structuredClone для canvasState, fallback на JSON.', error)
+    }
   }
 
   return JSON.parse(JSON.stringify(state)) as object
@@ -912,20 +916,32 @@ export const EditorCanvas = ({
         }
       }
       let usedPromise = false
-      const hydratedState = cloneCanvasState(initialState)
-      const maybePromise = canvas.loadFromJSON(hydratedState, () => {
-        if (!usedPromise) finalizeHydration()
-      })
-      usedPromise = Boolean((maybePromise as Promise<void> | undefined)?.then)
-      if (usedPromise) {
-        void (maybePromise as Promise<void>)
-          .then(() => {
-            finalizeHydration()
-          })
-          .catch((err) => {
-            if (!isActive || !canUseCanvas()) return
-            console.error('Ошибка восстановления канвы:', err)
-          })
+      let hydratedState: object = initialState
+      try {
+        hydratedState = cloneCanvasState(initialState)
+      } catch (error) {
+        console.warn('Не удалось подготовить canvasState для загрузки.', error)
+      }
+
+      try {
+        const maybePromise = canvas.loadFromJSON(hydratedState, () => {
+          if (!usedPromise) finalizeHydration()
+        })
+        usedPromise = Boolean((maybePromise as Promise<void> | undefined)?.then)
+        if (usedPromise) {
+          void (maybePromise as Promise<void>)
+            .then(() => {
+              finalizeHydration()
+            })
+            .catch((err) => {
+              if (!isActive || !canUseCanvas()) return
+              console.error('Ошибка восстановления канвы:', err)
+              syncOverlayObjects()
+            })
+        }
+      } catch (err) {
+        console.error('Ошибка запуска восстановления канвы:', err)
+        syncOverlayObjects()
       }
       return () => {
         isActive = false
