@@ -36,7 +36,21 @@ const CANVAS_WIDTH = 450
 const CANVAS_HEIGHT = 800
 const clampRadius = (radius: number, width: number, height: number): number =>
   Math.max(0, Math.min(radius, Math.min(width, height) / 2))
+const sanitizeCanvasObjects = (canvas: fabric.Canvas): void => {
+  const anyCanvas = canvas as fabric.Canvas & {
+    _objects?: Array<fabric.Object | undefined | null>
+  }
+  if (!Array.isArray(anyCanvas._objects)) return
+  const safeObjects = anyCanvas._objects.filter(
+    (obj): obj is fabric.Object => Boolean(obj)
+  )
+  if (safeObjects.length !== anyCanvas._objects.length) {
+    anyCanvas._objects = safeObjects
+  }
+}
+
 const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object => {
+  sanitizeCanvasObjects(canvas)
   const uniqueProps = new Set<string>(['data', ...extraProps])
   const toJSON = canvas.toJSON as unknown as (props?: string[]) => object
   return toJSON(Array.from(uniqueProps))
