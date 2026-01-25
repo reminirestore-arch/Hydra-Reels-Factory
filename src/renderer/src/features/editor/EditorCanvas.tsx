@@ -863,6 +863,7 @@ export const EditorCanvas = ({
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas) return
+    let isActive = true
 
     const canUseCanvas = (): boolean => {
       const liveCanvas = fabricRef.current === canvas
@@ -886,10 +887,19 @@ export const EditorCanvas = ({
       didHydrateRef.current = false
     }
 
-    if (didHydrateRef.current) return
+    if (didHydrateRef.current) {
+      return () => {
+        isActive = false
+      }
+    }
     didHydrateRef.current = true
 
     if (initialState) {
+      if (!canUseCanvas()) {
+        return () => {
+          isActive = false
+        }
+      }
       let usedPromise = false
       const maybePromise = canvas.loadFromJSON(initialState, () => {
         if (!usedPromise) finalizeHydration()
@@ -901,13 +911,19 @@ export const EditorCanvas = ({
             finalizeHydration()
           })
           .catch((err) => {
+            if (!isActive || !canUseCanvas()) return
             console.error('Ошибка восстановления канвы:', err)
           })
       }
-      return
+      return () => {
+        isActive = false
+      }
     }
 
     syncOverlayObjects()
+    return () => {
+      isActive = false
+    }
   }, [ensureFrameImage, filePath, initialState, syncOverlayObjects])
 
   useEffect(() => {
