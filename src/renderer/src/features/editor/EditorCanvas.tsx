@@ -864,6 +864,21 @@ export const EditorCanvas = ({
     const canvas = fabricRef.current
     if (!canvas) return
 
+    const canUseCanvas = (): boolean => {
+      const liveCanvas = fabricRef.current === canvas
+      const hasElements = Boolean((canvas as any).lowerCanvasEl && (canvas as any).upperCanvasEl)
+      return liveCanvas && hasElements
+    }
+
+    const finalizeHydration = (): void => {
+      if (!canUseCanvas()) return
+      // важное место: гарантируем роли, иначе дальше любая логика будет “плыть”
+      ensureRolesOnObjects(canvas)
+      syncOverlayObjects()
+      ensureFrameImage()
+      canvas.requestRenderAll()
+    }
+
     const lastHydration = lastHydrationRef.current
     const initialStateRef = initialState ?? null
     if (lastHydration.filePath !== filePath || lastHydration.initialState !== initialStateRef) {
@@ -875,13 +890,20 @@ export const EditorCanvas = ({
     didHydrateRef.current = true
 
     if (initialState) {
-      canvas.loadFromJSON(initialState, () => {
-        // важное место: гарантируем роли, иначе дальше любая логика будет “плыть”
-        ensureRolesOnObjects(canvas)
-        syncOverlayObjects()
-        ensureFrameImage()
-        canvas.requestRenderAll()
+      let usedPromise = false
+      const maybePromise = canvas.loadFromJSON(initialState, () => {
+        if (!usedPromise) finalizeHydration()
       })
+      usedPromise = Boolean((maybePromise as Promise<void> | undefined)?.then)
+      if (usedPromise) {
+        void (maybePromise as Promise<void>)
+          .then(() => {
+            finalizeHydration()
+          })
+          .catch((err) => {
+            console.error('Ошибка восстановления канвы:', err)
+          })
+      }
       return
     }
 
