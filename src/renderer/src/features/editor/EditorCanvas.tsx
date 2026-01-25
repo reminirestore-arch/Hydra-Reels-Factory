@@ -35,6 +35,15 @@ interface EditorCanvasProps {
 const CANVAS_WIDTH = 450
 const CANVAS_HEIGHT = 800
 
+/**
+ * Fabric: bounding boxes can be stale if coords weren't recalculated.
+ * Always call `obj.setCoords()` before relying on the result.
+ */
+const getObjectBoundingRect = (obj: fabric.Object) => {
+  // includeStroke=true, absolute=true for stable calculations in v6/v7
+  return obj.getBoundingRect(true, true)
+}
+
 type OverlayText = fabric.Textbox | fabric.IText
 type CanvasElementRole = 'overlay-background' | 'overlay-text' | 'frame'
 interface OverlayBlock {
@@ -95,6 +104,7 @@ export const EditorCanvas = ({
   const domGenRef = useRef(0)
 
   const frameImageRef = useRef<fabric.FabricImage | null>(null)
+  const syncingFromCanvasRef = useRef(false)
   const overlayMapRef = useRef<Map<number, OverlayBlock>>(new Map())
   const nextBlockIdRef = useRef(1)
 
@@ -238,7 +248,7 @@ export const EditorCanvas = ({
     background.setCoords()
     text.setCoords()
 
-    const backgroundBounds = background.getBoundingRect(true, true)
+    const backgroundBounds = getObjectBoundingRect(background)
     const textWidth = text.getScaledWidth()
     const textHeight = text.getScaledHeight()
 
@@ -487,10 +497,16 @@ export const EditorCanvas = ({
 
     const loadFrame = async (): Promise<void> => {
       try {
-        const imageUrl = await window.api.extractFrame(filePath)
-        if (!imageUrl) return
+        const raw = await window.api.extractFrame(filePath)
+        const imageUrl =
+          raw && typeof raw === 'object' && 'ok' in (raw as any)
+            ? (raw as any).ok
+              ? (raw as any).data
+              : null
+            : (raw as any)
+        if (!imageUrl || typeof imageUrl !== 'string') return
 
-        const img = await fabric.FabricImage.fromURL(imageUrl)
+        const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
 
         const scaleX = CANVAS_WIDTH / img.width!
         const scaleY = CANVAS_HEIGHT / img.height!
@@ -519,6 +535,7 @@ export const EditorCanvas = ({
   const applyOverlaySettings = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+    if (syncingFromCanvasRef.current) return
 
     const activeBlock = getOverlayBlock(getActiveBlockId())
     if (!activeBlock) return
@@ -532,8 +549,7 @@ export const EditorCanvas = ({
     text.set({
       fontSize: safe.text.fontSize ?? d.text.fontSize,
       fill: safe.text.color ?? d.text.color,
-      textAlign: safe.text.align ?? d.text.align,
-      width: safe.background.width ?? d.background.width
+      textAlign: safe.text.align ?? d.text.align
     })
     text.setCoords()
 
@@ -550,6 +566,12 @@ export const EditorCanvas = ({
       ry: radius
     })
     background.setCoords()
+
+    // keep user's textbox width, but never exceed background width
+    if (typeof text.width === 'number' && text.width > bw) {
+      text.set({ width: bw })
+      text.setCoords()
+    }
 
     clampTextToBackground(background, text)
     attachTextToBackground(background, text)
@@ -627,32 +649,29 @@ export const EditorCanvas = ({
     nextBlockIdRef.current = Math.max(nextBlockIdRef.current, nextId)
   }
 
-  const deriveOverlaySettingsFromBlock = useCallback(
-    (block: OverlayBlock): OverlaySettings => {
-      const defaults = buildDefaultOverlaySettings()
-      const background = block.background
-      const text = block.text
+  const deriveOverlaySettingsFromBlock = useCallback((block: OverlayBlock): OverlaySettings => {
+    const defaults = buildDefaultOverlaySettings()
+    const background = block.background
+    const text = block.text
 
-      return mergeOverlaySettings({
-        timing: overlaySettingsRef.current.timing,
-        text: {
-          ...overlaySettingsRef.current.text,
-          fontSize: text.fontSize ?? defaults.text.fontSize,
-          color: (text.fill as string) ?? defaults.text.color,
-          align: (text.textAlign as 'left' | 'center' | 'right') ?? defaults.text.align
-        },
-        background: {
-          ...overlaySettingsRef.current.background,
-          width: background.width ?? defaults.background.width,
-          height: background.height ?? defaults.background.height,
-          radius: background.rx ?? defaults.background.radius,
-          color: (background.fill as string) ?? defaults.background.color,
-          opacity: background.opacity ?? defaults.background.opacity
-        }
-      })
-    },
-    []
-  )
+    return mergeOverlaySettings({
+      timing: overlaySettingsRef.current.timing,
+      text: {
+        ...overlaySettingsRef.current.text,
+        fontSize: text.fontSize ?? defaults.text.fontSize,
+        color: (text.fill as string) ?? defaults.text.color,
+        align: (text.textAlign as 'left' | 'center' | 'right') ?? defaults.text.align
+      },
+      background: {
+        ...overlaySettingsRef.current.background,
+        width: background.width ?? defaults.background.width,
+        height: background.height ?? defaults.background.height,
+        radius: background.rx ?? defaults.background.radius,
+        color: (background.fill as string) ?? defaults.background.color,
+        opacity: background.opacity ?? defaults.background.opacity
+      }
+    })
+  }, [])
 
   const rebuildOverlayMap = useCallback((): void => {
     const canvas = fabricRef.current
@@ -752,6 +771,17 @@ export const EditorCanvas = ({
 
     rebuildOverlayMap()
 
+    // If nothing is selected yet (e.g. right after loading), pick the first block
+    // so UI controls (alignment, etc.) have a stable target.
+    if (!selectedBlockId) {
+      const first = Array.from(overlayMapRef.current.values())[0]
+      if (first) {
+        setSelectedBlockId(first.id)
+        setOverlaySettings(deriveOverlaySettingsFromBlock(first))
+        setTextValue(first.text.text ?? '')
+      }
+    }
+
     if (overlayMapRef.current.size === 0) {
       const blockId = nextBlockIdRef.current++
       const block = createOverlayBlock(blockId, textValue)
@@ -784,7 +814,12 @@ export const EditorCanvas = ({
     overlaySettings.text.align,
     rebuildOverlayMap,
     restoreLinkFromText,
-    textValue
+    textValue,
+    selectedBlockId,
+    deriveOverlaySettingsFromBlock,
+    setOverlaySettings,
+    setSelectedBlockId,
+    setTextValue
   ])
 
   useEffect(() => {
@@ -814,7 +849,7 @@ export const EditorCanvas = ({
     const canvas = fabricRef.current
     if (!canvas) return
 
-    const handleObjectMoving = (event: fabric.IEvent<MouseEvent>): void => {
+    const handleObjectMoving = (event: any): void => {
       const target = event.target
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -833,7 +868,7 @@ export const EditorCanvas = ({
       canvas.requestRenderAll()
     }
 
-    const handleTextChanged = (event: fabric.IEvent<Event>): void => {
+    const handleTextChanged = (event: fabric.TEvent<Event>): void => {
       const target = event.target as OverlayText | undefined
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -843,7 +878,7 @@ export const EditorCanvas = ({
       attachTextToBackground(block.background, block.text)
     }
 
-    const handleObjectScaling = (event: fabric.IEvent<MouseEvent>): void => {
+    const handleObjectScaling = (event: any): void => {
       const target = event.target
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -865,7 +900,7 @@ export const EditorCanvas = ({
       }
     }
 
-    const handleObjectRotating = (event: fabric.IEvent<MouseEvent>): void => {
+    const handleObjectRotating = (event: any): void => {
       const target = event.target
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -876,7 +911,7 @@ export const EditorCanvas = ({
       }
     }
 
-    const handleObjectModified = (event: fabric.IEvent<MouseEvent>): void => {
+    const handleObjectModified = (event: any): void => {
       const target = event.target
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -956,8 +991,13 @@ export const EditorCanvas = ({
       if (role === 'overlay-text' || role === 'overlay-background') {
         const block = getOverlayBlock(blockId)
         if (block) {
+          syncingFromCanvasRef.current = true
           setOverlaySettings(deriveOverlaySettingsFromBlock(block))
           setTextValue(block.text.text ?? '')
+          // allow the next user-driven change to propagate back to canvas
+          setTimeout(() => {
+            syncingFromCanvasRef.current = false
+          }, 0)
         }
       }
     }
@@ -966,24 +1006,24 @@ export const EditorCanvas = ({
       setSelectedBlockId(null)
     }
 
-    canvas.on('object:moving', handleObjectMoving)
-    canvas.on('object:scaling', handleObjectScaling)
-    canvas.on('object:rotating', handleObjectRotating)
-    canvas.on('object:modified', handleObjectModified)
-    canvas.on('text:changed', handleTextChanged)
+    canvas.on('object:moving', handleObjectMoving as any)
+    canvas.on('object:scaling', handleObjectScaling as any)
+    canvas.on('object:rotating', handleObjectRotating as any)
+    canvas.on('object:modified', handleObjectModified as any)
+    canvas.on('text:changed', handleTextChanged as any)
     canvas.on('selection:created', handleSelection)
     canvas.on('selection:updated', handleSelection)
-    canvas.on('selection:cleared', handleSelectionCleared)
+    canvas.on('selection:cleared', handleSelectionCleared as any)
 
     return () => {
-      canvas.off('object:moving', handleObjectMoving)
-      canvas.off('object:scaling', handleObjectScaling)
-      canvas.off('object:rotating', handleObjectRotating)
-      canvas.off('object:modified', handleObjectModified)
-      canvas.off('text:changed', handleTextChanged)
+      canvas.off('object:moving', handleObjectMoving as any)
+      canvas.off('object:scaling', handleObjectScaling as any)
+      canvas.off('object:rotating', handleObjectRotating as any)
+      canvas.off('object:modified', handleObjectModified as any)
+      canvas.off('text:changed', handleTextChanged as any)
       canvas.off('selection:created', handleSelection)
       canvas.off('selection:updated', handleSelection)
-      canvas.off('selection:cleared', handleSelectionCleared)
+      canvas.off('selection:cleared', handleSelectionCleared as any)
     }
   }, [
     attachTextToBackground,
@@ -997,6 +1037,7 @@ export const EditorCanvas = ({
   const alignTextInsideBackground = (horizontal: 'left' | 'center' | 'right'): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+    if (syncingFromCanvasRef.current) return
 
     const activeBlock = getOverlayBlock(getActiveBlockId())
     if (!activeBlock) return
@@ -1007,30 +1048,34 @@ export const EditorCanvas = ({
     background.setCoords()
     text.setCoords()
 
+    const rect = getObjectBoundingRect(background)
     const backgroundCenter = background.getCenterPoint()
-    const scaledBackgroundWidth = background.getScaledWidth()
-    const scaleX = text.scaleX ?? 1
-    const nextWidth =
-      Number.isFinite(scaledBackgroundWidth) && scaleX !== 0
-        ? scaledBackgroundWidth / scaleX
-        : text.width
 
-    if (nextWidth) {
-      text.set({ width: nextWidth })
-    }
+    // Keep the text anchored via link offsets. Don't switch originX to left/right,
+    // otherwise subsequent syncTextWithBackground will pull it back to center.
+    const padding = 16
+    const textW = text.getScaledWidth()
+    const currentCenter = text.getCenterPoint()
 
-    text.set({ left: backgroundCenter.x, originX: 'center', textAlign: horizontal })
-    text.setCoords()
+    let targetCenterX = backgroundCenter.x
+    if (horizontal === 'left') targetCenterX = rect.left + padding + textW / 2
+    if (horizontal === 'right') targetCenterX = rect.left + rect.width - padding - textW / 2
 
+    text.set({
+      originX: 'center',
+      left: targetCenterX,
+      top: currentCenter.y,
+      textAlign: horizontal
+    })
+    updateLinkOffsets(background, text)
     clampTextToBackground(background, text)
-    attachTextToBackground(background, text)
-    ensureFrameImage()
     canvas.requestRenderAll()
   }
 
   const alignTextVertically = (vertical: 'top' | 'center' | 'bottom'): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+    if (syncingFromCanvasRef.current) return
 
     const activeBlock = getOverlayBlock(getActiveBlockId())
     if (!activeBlock) return
@@ -1042,7 +1087,7 @@ export const EditorCanvas = ({
     text.setCoords()
 
     const backgroundCenter = background.getCenterPoint()
-    const bgRect = background.getBoundingRect(true, true)
+    const bgRect = getObjectBoundingRect(background)
     const textHeight = text.getScaledHeight()
     const halfText = textHeight / 2
 
@@ -1065,6 +1110,7 @@ export const EditorCanvas = ({
   const handleCenterText = (): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+    if (syncingFromCanvasRef.current) return
 
     const activeBlock = getOverlayBlock(getActiveBlockId())
     if (!activeBlock) return
@@ -1084,6 +1130,7 @@ export const EditorCanvas = ({
   const handleCenterBackgroundHorizontal = (): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+    if (syncingFromCanvasRef.current) return
 
     const activeBlock = getOverlayBlock(getActiveBlockId())
     if (!activeBlock) return
@@ -1098,6 +1145,7 @@ export const EditorCanvas = ({
   const handleCenterBackgroundVertical = (): void => {
     const canvas = fabricRef.current
     if (!canvas) return
+    if (syncingFromCanvasRef.current) return
 
     const activeBlock = getOverlayBlock(getActiveBlockId())
     if (!activeBlock) return
@@ -1133,7 +1181,7 @@ export const EditorCanvas = ({
 
       const exportScale = 1080 / CANVAS_WIDTH
       const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
-      const canvasState = canvas.toJSON(['data'])
+      const canvasState = canvasToJSON(canvas, ['data'])
 
       const textData = canvas
         .getObjects()

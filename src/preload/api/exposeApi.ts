@@ -6,8 +6,11 @@ const api: Api = {
   selectFolder: () => ipcRenderer.invoke(IPC.SelectFolder),
   selectOutputFolder: () => ipcRenderer.invoke(IPC.SelectOutputFolder),
   scanFolder: (path) => ipcRenderer.invoke(IPC.ScanFolder, { path }),
-  extractFrame: (path, strategyId, atSeconds) =>
-    ipcRenderer.invoke(IPC.ExtractFrame, { path, strategyId, atSeconds }),
+  extractFrame: async (path, strategyId, atSeconds) => {
+    const res = await ipcRenderer.invoke(IPC.ExtractFrame, { path, strategyId, atSeconds })
+    if (res && typeof res === 'object' && 'ok' in res) return res.ok ? res.data : null
+    return res ?? null
+  },
   saveOverlay: (dataUrl) => ipcRenderer.invoke(IPC.SaveOverlay, { dataUrl }),
   renderStrategy: (payload) => ipcRenderer.invoke(IPC.RenderStrategy, payload),
 
