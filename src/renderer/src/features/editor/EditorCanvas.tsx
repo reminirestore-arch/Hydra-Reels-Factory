@@ -56,6 +56,18 @@ const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object 
   return toJSON.call(canvas, Array.from(uniqueProps))
 }
 
+const cloneCanvasState = (state: object): object => {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(state)
+    } catch (error) {
+      console.warn('Не удалось structuredClone для canvasState, fallback на JSON.', error)
+    }
+  }
+
+  return JSON.parse(JSON.stringify(state)) as object
+}
+
 /**
  * Fabric: bounding boxes can be stale if coords weren't recalculated.
  * Always call `obj.setCoords()` before relying on the result.
@@ -67,7 +79,7 @@ const getObjectBoundingRect = (
   return obj.getBoundingRect()
 }
 
-type OverlayText = fabric.Textbox | fabric.IText
+type OverlayText = fabric.Textbox | fabric.IText | fabric.Text
 type CanvasElementRole = 'overlay-background' | 'overlay-text' | 'frame'
 interface OverlayBlock {
   id: number
@@ -735,7 +747,10 @@ export const EditorCanvas = ({
       if (role === 'overlay-background' && obj.type === 'rect') {
         blocks.set(blockId, { ...existing, id: blockId, background: obj as fabric.Rect })
       }
-      if (role === 'overlay-text' && (obj.type === 'textbox' || obj.type === 'i-text')) {
+      if (
+        role === 'overlay-text' &&
+        (obj.type === 'textbox' || obj.type === 'i-text' || obj.type === 'text')
+      ) {
         blocks.set(blockId, { ...existing, id: blockId, text: obj as OverlayText })
       }
     }
@@ -786,8 +801,8 @@ export const EditorCanvas = ({
     )
 
     for (const obj of textObjects) {
-      if (obj.type === 'i-text') {
-        const legacyText = obj as fabric.IText
+      if (obj.type === 'i-text' || obj.type === 'text') {
+        const legacyText = obj as fabric.IText | fabric.Text
         const blockId = getBlockId(legacyText) ?? nextBlockIdRef.current++
         const upgradedText = buildTextObject(legacyText.text ?? 'Текст Рилса')
 
@@ -901,19 +916,32 @@ export const EditorCanvas = ({
         }
       }
       let usedPromise = false
-      const maybePromise = canvas.loadFromJSON(initialState, () => {
-        if (!usedPromise) finalizeHydration()
-      })
-      usedPromise = Boolean((maybePromise as Promise<void> | undefined)?.then)
-      if (usedPromise) {
-        void (maybePromise as Promise<void>)
-          .then(() => {
-            finalizeHydration()
-          })
-          .catch((err) => {
-            if (!isActive || !canUseCanvas()) return
-            console.error('Ошибка восстановления канвы:', err)
-          })
+      let hydratedState: object = initialState
+      try {
+        hydratedState = cloneCanvasState(initialState)
+      } catch (error) {
+        console.warn('Не удалось подготовить canvasState для загрузки.', error)
+      }
+
+      try {
+        const maybePromise = canvas.loadFromJSON(hydratedState, () => {
+          if (!usedPromise) finalizeHydration()
+        })
+        usedPromise = Boolean((maybePromise as Promise<void> | undefined)?.then)
+        if (usedPromise) {
+          void (maybePromise as Promise<void>)
+            .then(() => {
+              finalizeHydration()
+            })
+            .catch((err) => {
+              if (!isActive || !canUseCanvas()) return
+              console.error('Ошибка восстановления канвы:', err)
+              syncOverlayObjects()
+            })
+        }
+      } catch (err) {
+        console.error('Ошибка запуска восстановления канвы:', err)
+        syncOverlayObjects()
       }
       return () => {
         isActive = false
@@ -1266,7 +1294,7 @@ export const EditorCanvas = ({
 
       const exportScale = 1080 / CANVAS_WIDTH
       const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
-      const canvasState = canvasToJSON(canvas, ['data'])
+      const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data']))
 
       const textData = canvas
         .getObjects()
