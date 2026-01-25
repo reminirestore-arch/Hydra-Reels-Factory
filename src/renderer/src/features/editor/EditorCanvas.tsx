@@ -38,7 +38,8 @@ const clampRadius = (radius: number, width: number, height: number): number =>
   Math.max(0, Math.min(radius, Math.min(width, height) / 2))
 const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object => {
   const uniqueProps = new Set<string>(['data', ...extraProps])
-  return canvas.toJSON(Array.from(uniqueProps))
+  const toJSON = canvas.toJSON as unknown as (props?: string[]) => object
+  return toJSON(Array.from(uniqueProps))
 }
 
 /**
