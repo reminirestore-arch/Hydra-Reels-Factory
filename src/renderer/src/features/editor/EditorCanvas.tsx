@@ -53,7 +53,7 @@ const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object 
   sanitizeCanvasObjects(canvas)
   const uniqueProps = new Set<string>(['data', ...extraProps])
   const toJSON = canvas.toJSON as unknown as (props?: string[]) => object
-  return toJSON(Array.from(uniqueProps))
+  return toJSON.call(canvas, Array.from(uniqueProps))
 }
 
 /**
@@ -1205,9 +1205,9 @@ export const EditorCanvas = ({
     const canvas = fabricRef.current
     if (!canvas) return
 
-    const bg = canvas.backgroundImage
+    const bg = canvas.backgroundImage ?? undefined
     try {
-      canvas.backgroundImage = null
+      canvas.backgroundImage = undefined
       canvas.requestRenderAll()
 
       const exportScale = 1080 / CANVAS_WIDTH
