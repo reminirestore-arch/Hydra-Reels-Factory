@@ -79,7 +79,7 @@ export const EditorPanel = ({
                     )}
                     <Button
                       size="sm"
-                      variant="flat"
+                      variant="primary"
                       onPress={() => onOpenEditor(strat.id)}
                       isDisabled={isProcessing}
                     >

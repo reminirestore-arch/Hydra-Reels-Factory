@@ -125,7 +125,8 @@
 
 ## 6. Технические детали Рендера (Implementation)
 
-Эти настройки **обязательны** для реализации в TypeScript модуле `src/main/ffmpeg.ts`.
+Эти настройки **обязательны** для реализации в TypeScript модуле `src/
+main/ffmpeg.ts`.
 
 ### 6.1. Кодирование
 * **Video Codec:** `h264_videotoolbox` (Hardware acceleration for macOS) или `libx264` (fallback).
