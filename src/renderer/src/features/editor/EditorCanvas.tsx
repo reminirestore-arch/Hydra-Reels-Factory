@@ -473,9 +473,17 @@ export const EditorCanvas = ({
     overlayMapRef.current = new Map()
     nextBlockIdRef.current = 1
 
+    const canUseCanvas = (): boolean => {
+      const liveCanvas = fabricRef.current === canvas
+      const hasElements = Boolean((canvas as any).lowerCanvasEl && (canvas as any).upperCanvasEl)
+      return liveCanvas && hasElements
+    }
+
     requestAnimationFrame(() => {
+      if (!canUseCanvas()) return
       canvas.calcOffset()
       const ensureOffset = (): void => {
+        if (!canUseCanvas()) return
         canvas.calcOffset()
       }
       canvas.on('mouse:down', ensureOffset)
@@ -502,8 +510,15 @@ export const EditorCanvas = ({
     const host = hostRef.current
     if (!canvas || !host) return
 
+    const canUseCanvas = (): boolean => {
+      const liveCanvas = fabricRef.current === canvas
+      const hasElements = Boolean((canvas as any).lowerCanvasEl && (canvas as any).upperCanvasEl)
+      return liveCanvas && hasElements
+    }
+
     const ro = new ResizeObserver(() => {
       requestAnimationFrame(() => {
+        if (!canUseCanvas()) return
         canvas.calcOffset()
         canvas.requestRenderAll()
       })
@@ -512,6 +527,7 @@ export const EditorCanvas = ({
     ro.observe(host)
 
     requestAnimationFrame(() => {
+      if (!canUseCanvas()) return
       canvas.calcOffset()
       canvas.requestRenderAll()
     })
