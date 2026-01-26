@@ -10,7 +10,7 @@ import {
 } from '../utils/fabricHelpers'
 import { OverlaySettings, StrategyProfileSettings } from '@shared/types'
 
-// Локальный тип для ref, чтобы избежать проблем с deprecation в типах React
+// Локальный тип для ref
 type MutableRef<T> = { current: T }
 
 interface UseEditorHydrationProps {
@@ -48,23 +48,58 @@ export const useEditorHydration = ({
 
   // Load Frame
   useEffect(() => {
+    // Ждем готовности канвы и наличия пути к файлу
     if (!canvasInstance || !filePath) return
     const canvas = canvasInstance
 
     const loadFrame = async (): Promise<void> => {
       try {
+        console.log('[useEditorHydration] Requesting frame for:', filePath)
         const raw = await window.api.extractFrame(filePath)
-        const imageUrl =
+
+        let imageUrl =
           raw && typeof raw === 'object' && 'ok' in (raw as any)
             ? (raw as any).ok
               ? (raw as any).data
               : null
             : (raw as any)
-        if (!imageUrl || typeof imageUrl !== 'string') return
-        if (!isCanvasReadyRef.current) return
 
-        const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
-        const scale = Math.max(CANVAS_WIDTH / img.width!, CANVAS_HEIGHT / img.height!)
+        if (!imageUrl || typeof imageUrl !== 'string') {
+          console.warn('[useEditorHydration] Invalid image URL from extractFrame', raw)
+          return
+        }
+
+        // --- FIX: Добавляем протокол file:// для локальных путей Windows/Unix, если его нет
+        if (
+          !imageUrl.startsWith('http') &&
+          !imageUrl.startsWith('data:') &&
+          !imageUrl.startsWith('file://')
+        ) {
+          // Если это Windows путь (C:\...), добавляем / перед ним для file:///
+          if (imageUrl.includes(':\\')) {
+            imageUrl = 'file:///' + imageUrl.replace(/\\/g, '/')
+          } else {
+            imageUrl = 'file://' + imageUrl
+          }
+        }
+
+        console.log(
+          '[useEditorHydration] Loading image from URL:',
+          imageUrl.substring(0, 60) + '...'
+        )
+
+        // Создаем изображение
+        const img = await fabric.FabricImage.fromURL(imageUrl)
+
+        if (!img) {
+          console.error('[useEditorHydration] Failed to create FabricImage from URL')
+          return
+        }
+
+        // Вычисляем масштаб (Cover logic)
+        const scaleX = CANVAS_WIDTH / img.width!
+        const scaleY = CANVAS_HEIGHT / img.height!
+        const scale = Math.max(scaleX, scaleY)
 
         img.set({
           left: CANVAS_WIDTH / 2,
@@ -72,20 +107,28 @@ export const useEditorHydration = ({
           originX: 'center',
           originY: 'center',
           scaleX: scale,
-          scaleY: scale
+          scaleY: scale,
+          selectable: false, // Фон не должен выделяться
+          evented: false, // Фон не должен перехватывать события
+          objectCaching: false
         })
 
-        frameImageRef.current = img
+        // Сохраняем ссылку и ставим фон
+        ;(frameImageRef as any).current = img
         canvas.backgroundImage = img
-        if (canvas.contextContainer && isCanvasReadyRef.current) {
+
+        // Форсируем рендер
+        if (canvas.contextContainer) {
           canvas.requestRenderAll()
+          console.log('[useEditorHydration] Frame rendered successfully')
         }
       } catch (err) {
-        console.error('Ошибка загрузки кадра:', err)
+        console.error('[useEditorHydration] Error loading frame:', err)
       }
     }
+
     void loadFrame()
-  }, [filePath, canvasInstance, isCanvasReadyRef, frameImageRef])
+  }, [filePath, canvasInstance, frameImageRef])
 
   // Hydrate JSON
   useEffect(() => {
@@ -160,14 +203,22 @@ export const useEditorHydration = ({
     const bg = canvas.backgroundImage
 
     try {
+      // Убираем фон перед сохранением JSON, чтобы он не попал в структуру объектов (если он вдруг там есть)
       canvas.backgroundImage = undefined
+
       const exportScale = 1080 / CANVAS_WIDTH
+      // toDataURL с multiplier автоматически отрендерит все, включая фон (если бы он был image),
+      // но для превью нам нужен чистый снимок.
+      // ВАЖНО: Если мы хотим превью с фоном, надо вернуть bg перед toDataURL?
+      // Нет, обычно превью оверлея - это прозрачный PNG с текстом.
+      // Если вам нужно превью С ВИДЕО КАДРОМ, то нужно вернуть bg.
+      // В текущей логике мы сохраняем прозрачный PNG оверлея.
+
       const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
       const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data']))
 
       const textData = canvas
         .getObjects()
-        // ИСПРАВЛЕНО: fabric.Text -> fabric.FabricText
         .filter(
           (obj) =>
             (obj as any) instanceof fabric.IText ||

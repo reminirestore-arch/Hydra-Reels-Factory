@@ -52,6 +52,37 @@ export const SettingsPanel = ({
     }
   })()
 
+  // Вспомогательная функция для HeroUI v3 Slider
+  const renderSlider = (
+    label: string,
+    value: number,
+    onChange: (v: number) => void,
+    min: number,
+    max: number,
+    step: number,
+    color: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'default' = 'primary'
+  ) => (
+    <Slider
+      aria-label={label}
+      step={step}
+      maxValue={max}
+      minValue={min}
+      value={value}
+      onChange={(v) => onChange(v as number)}
+      className="w-full"
+      color={color}
+    >
+      <div className="flex justify-between mb-1">
+        <Label className="text-xs font-medium text-default-600">{label}</Label>
+        <Slider.Output className="text-xs font-bold text-default-600" />
+      </div>
+      <Slider.Track className="bg-default-500/20">
+        <Slider.Fill />
+        <Slider.Thumb />
+      </Slider.Track>
+    </Slider>
+  )
+
   return (
     <aside className="w-96 border-l border-white/10 bg-black/60">
       <ScrollShadow className="h-full p-6 space-y-6">
@@ -60,36 +91,25 @@ export const SettingsPanel = ({
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Тайминг текста
           </div>
-          <Slider
-            step={0.5}
-            maxValue={15}
-            minValue={0}
-            value={overlaySettings.timing.startTime}
-            onChange={(v) =>
-              setOverlaySettings((p: any) => ({ ...p, timing: { ...p.timing, startTime: v } }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Старт (сек)</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
-          <Slider
-            step={0.5}
-            maxValue={15}
-            minValue={1}
-            value={overlaySettings.timing.duration}
-            onChange={(v) =>
-              setOverlaySettings((p: any) => ({ ...p, timing: { ...p.timing, duration: v } }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Длительность (сек)</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
+          {renderSlider(
+            'Старт (сек)',
+            overlaySettings.timing.startTime,
+            (v) =>
+              setOverlaySettings((p: any) => ({ ...p, timing: { ...p.timing, startTime: v } })),
+            0,
+            15,
+            0.5,
+            'primary'
+          )}
+          {renderSlider(
+            'Длительность (сек)',
+            overlaySettings.timing.duration,
+            (v) => setOverlaySettings((p: any) => ({ ...p, timing: { ...p.timing, duration: v } })),
+            1,
+            15,
+            0.5,
+            'secondary'
+          )}
         </div>
 
         {/* Text */}
@@ -108,21 +128,15 @@ export const SettingsPanel = ({
             />
           </div>
 
-          <Slider
-            step={2}
-            maxValue={96}
-            minValue={18}
-            value={overlaySettings.text.fontSize}
-            onChange={(v) =>
-              setOverlaySettings((p: any) => ({ ...p, text: { ...p.text, fontSize: v } }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Размер</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
+          {renderSlider(
+            'Размер',
+            overlaySettings.text.fontSize,
+            (v) => setOverlaySettings((p: any) => ({ ...p, text: { ...p.text, fontSize: v } })),
+            18,
+            96,
+            2,
+            'warning'
+          )}
 
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Цвет</span>
@@ -189,69 +203,56 @@ export const SettingsPanel = ({
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Подложка
           </div>
-          <Slider
-            step={10}
-            maxValue={600}
-            minValue={120}
-            value={overlaySettings.background.width}
-            onChange={(v) =>
-              setOverlaySettings((p: any) => ({ ...p, background: { ...p.background, width: v } }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Ширина</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
-          <Slider
-            step={10}
-            maxValue={300}
-            minValue={60}
-            value={overlaySettings.background.height}
-            onChange={(v) =>
-              setOverlaySettings((p: any) => ({ ...p, background: { ...p.background, height: v } }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Высота</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
-          <Slider
-            step={2}
-            maxValue={80}
-            minValue={0}
-            value={overlaySettings.background.radius}
-            onChange={(v) =>
-              setOverlaySettings((p: any) => ({ ...p, background: { ...p.background, radius: v } }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Скругление</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
-          <Slider
-            step={0.05}
-            maxValue={1}
-            minValue={0}
-            value={overlaySettings.background.opacity}
-            onChange={(v) =>
+          {renderSlider(
+            'Ширина',
+            overlaySettings.background.width,
+            (v) =>
+              setOverlaySettings((p: any) => ({ ...p, background: { ...p.background, width: v } })),
+            120,
+            600,
+            10,
+            'primary'
+          )}
+          {renderSlider(
+            'Высота',
+            overlaySettings.background.height,
+            (v) =>
+              setOverlaySettings((p: any) => ({
+                ...p,
+                background: { ...p.background, height: v }
+              })),
+            60,
+            300,
+            10,
+            'secondary'
+          )}
+          {renderSlider(
+            'Скругление',
+            overlaySettings.background.radius,
+            (v) =>
+              setOverlaySettings((p: any) => ({
+                ...p,
+                background: { ...p.background, radius: v }
+              })),
+            0,
+            80,
+            2,
+            'primary'
+          )}
+          {renderSlider(
+            'Прозрачность',
+            overlaySettings.background.opacity,
+            (v) =>
               setOverlaySettings((p: any) => ({
                 ...p,
                 background: { ...p.background, opacity: v }
-              }))
-            }
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">Прозрачность</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
+              })),
+            0,
+            1,
+            0.05,
+            'warning'
+          )}
+
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Цвет</span>
             <input
@@ -281,19 +282,15 @@ export const SettingsPanel = ({
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Параметры профиля
           </div>
-          <Slider
-            step={profileConfig.step as number}
-            maxValue={profileConfig.max as number}
-            minValue={profileConfig.min as number}
-            value={profileSettings[profileConfig.key] as number}
-            onChange={(v) => setProfileSettings((p: any) => ({ ...p, [profileConfig.key]: v }))}
-            className="w-full"
-          >
-            <div className="flex justify-between mb-1">
-              <Label className="text-xs font-medium text-default-600">{profileConfig.label}</Label>
-              <Slider.Output className="text-xs font-bold text-default-600" />
-            </div>
-          </Slider>
+          {renderSlider(
+            profileConfig.label,
+            profileSettings[profileConfig.key] as number,
+            (v) => setProfileSettings((p: any) => ({ ...p, [profileConfig.key]: v })),
+            profileConfig.min,
+            profileConfig.max,
+            profileConfig.step,
+            'success'
+          )}
         </div>
       </ScrollShadow>
     </aside>
