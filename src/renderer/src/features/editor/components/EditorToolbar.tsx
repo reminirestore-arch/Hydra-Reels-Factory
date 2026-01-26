@@ -16,10 +16,8 @@ export const EditorToolbar = ({ onAddText, onSave, onClose }: EditorToolbarProps
           variant="primary"
           onPress={onAddText}
           className="font-medium shadow-lg shadow-primary/20"
-        >
-          <Type size={16} />
-          Добавить текст
-        </Button>
+          {...({ children: <><Type size={16} />Добавить текст</> } as any)}
+        />
       </div>
 
       <div className="text-default-500 text-xs font-mono flex items-center gap-2">
@@ -28,19 +26,14 @@ export const EditorToolbar = ({ onAddText, onSave, onClose }: EditorToolbarProps
       </div>
 
       <div className="flex gap-2">
-        <Button size="sm" variant="flat" onPress={onClose} className="font-medium">
-          <X size={16} />
-          Закрыть
-        </Button>
+        <Button size="sm" variant="ghost" onPress={onClose} className="font-medium" {...({ children: <><X size={16} />Закрыть</> } as any)} />
         <Button
           size="sm"
-          variant="solid"
+          variant="primary"
           onPress={onSave}
           className="font-medium bg-success text-black"
-        >
-          <Save size={16} />
-          Сохранить
-        </Button>
+          {...({ children: <><Save size={16} />Сохранить</> } as any)}
+        />
       </div>
     </div>
   )

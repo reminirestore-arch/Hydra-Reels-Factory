@@ -108,8 +108,8 @@ export const EditorCanvas = ({
               block.text.set({ text: val })
               if (fabricRef.current) {
                 fabricRef.current.fire('text:changed', {
-                  target: block.text
-                } as fabric.TEvent)
+                  target: block.text as fabric.IText
+                })
               }
               fabricRef.current?.requestRenderAll()
             }

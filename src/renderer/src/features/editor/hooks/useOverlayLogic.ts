@@ -41,7 +41,7 @@ import {
 type MutableRef<T> = { current: T }
 
 const getFabricImageSource = (image?: fabric.FabricImage | null): string | undefined =>
-  image?.getSrc?.() ?? image?.src
+  image?.getSrc?.()
 
 interface UseOverlayLogicProps {
   fabricRef: MutableRef<fabric.Canvas | null>
@@ -177,7 +177,10 @@ export const useOverlayLogic = ({
 
   const setOverlaySettingsIfChanged = useCallback(
     (next: OverlaySettings) => {
-      setOverlaySettings((prev) => (overlaySettingsEqual(prev, next) ? prev : next))
+      const prev = overlaySettingsRef.current
+      if (!overlaySettingsEqual(prev, next)) {
+        setOverlaySettings(next)
+      }
     },
     [overlaySettingsEqual, setOverlaySettings]
   )
@@ -258,13 +261,13 @@ export const useOverlayLogic = ({
       }
     }
 
-    const completeBlocks = [...blocks.entries()].filter(([, b]) => b.background && b.text) as Array<
+    const completeBlocks = Array.from(blocks.entries()).filter(([, b]) => b.background && b.text) as Array<
       [number, OverlayBlock]
     >
     overlayMapRef.current = new Map(completeBlocks)
 
     const elements: CanvasElementNode[] = [{ id: 'frame', label: 'Кадр видео', role: 'frame' }]
-    const sorted = [...overlayMapRef.current.values()].sort((a, b) => a.id - b.id)
+    const sorted = Array.from(overlayMapRef.current.values()).sort((a, b) => a.id - b.id)
 
     sorted.forEach((block, index) => {
       elements.push({
@@ -389,7 +392,7 @@ export const useOverlayLogic = ({
       }
     }
 
-    for (const block of overlayMapRef.current.values()) {
+    for (const block of Array.from(overlayMapRef.current.values())) {
       const restored = restoreLinkFromText(block.background, block.text)
       if (!restored) attachTextToBackground(block.background, block.text)
       clampTextToBackground(block.background, block.text)
@@ -461,7 +464,7 @@ export const useOverlayLogic = ({
       canvas.requestRenderAll()
     }
 
-    const handleTextChanged = (e: fabric.TEvent) => {
+    const handleTextChanged = (e: any) => {
       const target = getEventTarget<OverlayText>(e)
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -495,7 +498,7 @@ export const useOverlayLogic = ({
       }
     }
 
-    const handleObjectModified = (e: fabric.TEvent) => {
+    const handleObjectModified = (e: any) => {
       const target = getEventTarget<fabric.Object>(e)
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))

@@ -1,8 +1,8 @@
 import type {
-  Api,
   Result,
   FfmpegLogEvent,
-  RenderStrategyPayload
+  RenderStrategyPayload,
+  ScanFolderResult
 } from '@shared/ipc/contracts'
 import type { StrategyType } from '@shared/types'
 
@@ -23,16 +23,24 @@ function unwrap<T>(res: Result<T>): T {
 }
 
 export const apiClient = {
-  selectFolder: async () => unwrap(await window.api.selectFolder()),
-  selectOutputFolder: async () => unwrap(await window.api.selectOutputFolder()),
-  scanFolder: async (path: string) => unwrap(await window.api.scanFolder(path)),
+  selectFolder: async () => unwrap(await (window.api.selectFolder() as Promise<Result<string | null>>)),
+  selectOutputFolder: async () => unwrap(await (window.api.selectOutputFolder() as Promise<Result<string | null>>)),
+  scanFolder: async (path: string) => unwrap(await (window.api.scanFolder(path) as Promise<Result<ScanFolderResult>>)),
   extractFrame: async (path: string, strategyId?: StrategyType, atSeconds?: number) =>
-    unwrap(await window.api.extractFrame(path, strategyId, atSeconds)),
-  saveOverlay: async (dataUrl: string) => unwrap(await window.api.saveOverlay(dataUrl)),
+    unwrap(await (window.api.extractFrame(path, strategyId, atSeconds) as Promise<Result<string>>)),
+  saveOverlay: async (dataUrl: string) => unwrap(await (window.api.saveOverlay(dataUrl) as Promise<Result<string>>)),
   renderStrategy: async (payload: RenderStrategyPayload) =>
-    unwrap(await window.api.renderStrategy(payload)),
+    unwrap(await (window.api.renderStrategy(payload) as Promise<Result<boolean>>)),
   onFfmpegLog: (handler: (e: FfmpegLogEvent) => void) => {
     if (!window.api.onFfmpegLog) return () => {}
     return window.api.onFfmpegLog(handler)
   }
-} satisfies Omit<Api, 'onFfmpegLog'> & { onFfmpegLog: (h: (e: FfmpegLogEvent) => void) => () => void }
+} satisfies {
+  selectFolder: () => Promise<string | null>
+  selectOutputFolder: () => Promise<string | null>
+  scanFolder: (path: string) => Promise<ScanFolderResult>
+  extractFrame: (path: string, strategyId?: StrategyType, atSeconds?: number) => Promise<string>
+  saveOverlay: (dataUrl: string) => Promise<string>
+  renderStrategy: (payload: RenderStrategyPayload) => Promise<boolean>
+  onFfmpegLog: (h: (e: FfmpegLogEvent) => void) => () => void
+}

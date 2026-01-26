@@ -28,7 +28,7 @@ const extractImageUrl = (raw: unknown): string | null => {
 }
 
 const getFabricImageSource = (image?: fabric.FabricImage | null): string | undefined =>
-  image?.getSrc?.() ?? image?.src
+  image?.getSrc?.() ?? (image as unknown as { src?: string } | null)?.src
 
 interface UseEditorHydrationProps {
   fabricRef: MutableRef<fabric.Canvas | null>

@@ -40,9 +40,7 @@ export const EditorPanel = ({
               </Chip>
             </div>
           </div>
-          <Button isIconOnly size="sm">
-            <Play size={16} fill="currentColor" />
-          </Button>
+          <Button isIconOnly size="sm" {...({ children: <Play size={16} fill="currentColor" /> } as any)} />
         </div>
       </div>
 
@@ -82,9 +80,8 @@ export const EditorPanel = ({
                       variant="primary"
                       onPress={() => onOpenEditor(strat.id)}
                       isDisabled={isProcessing}
-                    >
-                      Настроить
-                    </Button>
+                      {...({ children: 'Настроить' } as any)}
+                    />
                   </div>
                 </Card>
               )

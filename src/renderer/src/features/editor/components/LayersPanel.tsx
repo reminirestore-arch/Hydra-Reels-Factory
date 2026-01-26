@@ -1,13 +1,12 @@
 import { ScrollShadow } from '@heroui/react'
 import { CanvasElementNode, CanvasElementRole, OverlayBlock } from '../utils/fabricHelpers'
-import { MutableRefObject } from 'react'
 import * as fabric from 'fabric'
 
 interface LayersPanelProps {
   elements: CanvasElementNode[]
   selectedRole: CanvasElementRole | null
   selectedBlockId: number | null
-  fabricRef: MutableRefObject<fabric.Canvas | null>
+  fabricRef: { current: fabric.Canvas | null }
   getOverlayBlock: (id?: number | null) => OverlayBlock | null
 }
 

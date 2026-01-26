@@ -65,7 +65,7 @@ export const SettingsPanel = ({
     color: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'default' = 'primary'
   ) => (
     <Slider
-      label={label} // Используем проп label для надежности, если компонент Label внутри не рендерится
+      label={label}
       step={step}
       maxValue={max}
       minValue={min}
@@ -73,15 +73,16 @@ export const SettingsPanel = ({
       onChange={(v) => onChange(v as number)}
       className="w-full"
       color={color}
-      // Передаем label как children, следуя документации
-    >
-      <Label className="text-xs font-medium text-default-600">{label}</Label>
-      <Slider.Output className="text-xs font-bold text-default-600" />
-      <Slider.Track className="bg-default-500/20">
-        <Slider.Fill />
-        <Slider.Thumb />
-      </Slider.Track>
-    </Slider>
+      {...({
+        children: (
+          <>
+            <Label {...({ children: label, className: 'text-xs font-medium text-default-600' } as any)} />
+            <Slider.Output {...({ className: 'text-xs font-bold text-default-600' } as any)} />
+            <Slider.Track {...({ className: 'bg-default-500/20', children: [<Slider.Fill key="fill" />, <Slider.Thumb key="thumb" />] } as any)} />
+          </>
+        )
+      } as any)}
+    />
   )
 
   const alignOptions = ['left', 'center', 'right'] as const
@@ -119,7 +120,7 @@ export const SettingsPanel = ({
         <div className="space-y-4">
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Текст</div>
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-default-600">Содержание</Label>
+            <Label {...({ children: 'Содержание', className: 'text-xs font-medium text-default-600' } as any)} />
             <input
               type="text"
               value={textValue}
@@ -163,21 +164,23 @@ export const SettingsPanel = ({
                 <Button
                   key={align}
                   size="sm"
-                  variant={overlaySettings.text.align === align ? 'solid' : 'flat'}
+                  variant={overlaySettings.text.align === align ? 'primary' : 'ghost'}
                   onPress={() => {
                     setOverlaySettings((p) => ({ ...p, text: { ...p.text, align } }))
                     onAlignText(align)
                   }}
                   className="min-w-9"
-                >
-                  {align === 'left' ? (
-                    <AlignLeft size={14} />
-                  ) : align === 'center' ? (
-                    <AlignCenter size={14} />
-                  ) : (
-                    <AlignRight size={14} />
-                  )}
-                </Button>
+                  {...({
+                    children:
+                      align === 'left' ? (
+                        <AlignLeft size={14} />
+                      ) : align === 'center' ? (
+                        <AlignCenter size={14} />
+                      ) : (
+                        <AlignRight size={14} />
+                      )
+                  } as any)}
+                />
               ))}
             </div>
           </div>
@@ -185,20 +188,12 @@ export const SettingsPanel = ({
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Вертикаль</span>
             <div className="flex gap-1">
-              <Button size="sm" variant="flat" onPress={() => onAlignVertical('top')}>
-                <AlignVerticalJustifyStart size={14} />
-              </Button>
-              <Button size="sm" variant="flat" onPress={() => onAlignVertical('center')}>
-                <AlignVerticalJustifyCenter size={14} />
-              </Button>
-              <Button size="sm" variant="flat" onPress={() => onAlignVertical('bottom')}>
-                <AlignVerticalJustifyEnd size={14} />
-              </Button>
+              <Button size="sm" variant="ghost" onPress={() => onAlignVertical('top')} {...({ children: <AlignVerticalJustifyStart size={14} /> } as any)} />
+              <Button size="sm" variant="ghost" onPress={() => onAlignVertical('center')} {...({ children: <AlignVerticalJustifyCenter size={14} /> } as any)} />
+              <Button size="sm" variant="ghost" onPress={() => onAlignVertical('bottom')} {...({ children: <AlignVerticalJustifyEnd size={14} /> } as any)} />
             </div>
           </div>
-          <Button size="sm" variant="flat" onPress={onCenterText}>
-            Центрировать внутри подложки
-          </Button>
+          <Button size="sm" variant="ghost" onPress={onCenterText} {...({ children: 'Центрировать внутри подложки' } as any)} />
         </div>
 
         {/* Background */}
@@ -271,12 +266,8 @@ export const SettingsPanel = ({
             />
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="flat" onPress={() => onCenterBackground('horizontal')}>
-              Центр по горизонтали
-            </Button>
-            <Button size="sm" variant="flat" onPress={() => onCenterBackground('vertical')}>
-              Центр по вертикали
-            </Button>
+            <Button size="sm" variant="ghost" onPress={() => onCenterBackground('horizontal')} {...({ children: 'Центр по горизонтали' } as any)} />
+            <Button size="sm" variant="ghost" onPress={() => onCenterBackground('vertical')} {...({ children: 'Центр по вертикали' } as any)} />
           </div>
         </div>
 

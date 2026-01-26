@@ -74,7 +74,7 @@ export const getObjectBoundingRect = (
 export const getEventTarget = <T extends fabric.Object = fabric.Object>(
   event: fabric.TEvent
 ): T | null => {
-  const target = event?.target
+  const target = (event as fabric.TEvent & { target?: fabric.Object })?.target
   if (!target) return null
   return target as T
 }

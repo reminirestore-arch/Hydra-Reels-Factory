@@ -39,7 +39,7 @@ export const ensureOverlayIds = (
     if (id) existingIds.add(id)
   })
 
-  let nextId = Math.max(0, ...existingIds) + 1
+  let nextId = Math.max(0, ...Array.from(existingIds)) + 1
   const assignId = (obj: fabric.Object, blockId: number) => {
     obj.data = { ...(obj.data ?? {}), blockId }
   }

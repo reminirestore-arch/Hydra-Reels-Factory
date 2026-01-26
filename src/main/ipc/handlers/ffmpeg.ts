@@ -1,5 +1,5 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
-import path from 'node:path'
+import { join as pathJoin } from 'node:path'
 import { IPC } from '@shared/ipc/channels'
 import type {
   ExtractFrameArgs,
@@ -26,7 +26,7 @@ async function renderStrategyImpl(
   const outputName = payload.outputName.endsWith('.mp4')
     ? payload.outputName
     : `${payload.outputName}.mp4`
-  const outputPath = path.join(payload.outputDir, outputName)
+  const outputPath = pathJoin(payload.outputDir, outputName)
 
   const sendLog = (level: FfmpegLogEvent['level'], line: string): void => {
     event.sender.send(IPC.FfmpegLog, {

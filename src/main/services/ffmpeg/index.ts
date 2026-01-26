@@ -1,8 +1,11 @@
-import ffmpeg from 'fluent-ffmpeg'
-import ffmpegPath from 'ffmpeg-static'
-import * as fs from 'node:fs'
-import type { StrategyType } from '@shared/types'
-import { buildAudioFilter, buildStrategyFilter } from './filters'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ffmpeg = require('fluent-ffmpeg');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ffmpegPathModule = require('ffmpeg-static');
+const ffmpegPath: string | undefined = typeof ffmpegPathModule === 'string' ? ffmpegPathModule : ffmpegPathModule?.default ?? undefined;
+import * as fs from 'node:fs';
+import type { StrategyType } from '@shared/types';
+import { buildAudioFilter, buildStrategyFilter } from './filters';
 import {
   createTempPath,
   removeTempFile,

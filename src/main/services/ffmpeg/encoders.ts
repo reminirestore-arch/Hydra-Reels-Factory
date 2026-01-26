@@ -1,5 +1,6 @@
-import ffmpeg from 'fluent-ffmpeg'
 import type { StrategyType } from '@shared/types'
+
+const ffmpeg = require('fluent-ffmpeg')
 
 export type VideoEncoderId = 'h264_videotoolbox' | 'h264_nvenc' | 'libx264'
 

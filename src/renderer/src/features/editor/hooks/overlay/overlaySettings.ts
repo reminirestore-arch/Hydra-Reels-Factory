@@ -15,7 +15,7 @@ const normalizeTextAlign = (
 
 export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): boolean => {
   return (
-    a.timing.start === b.timing.start &&
+    a.timing.startTime === b.timing.startTime &&
     a.timing.duration === b.timing.duration &&
     a.text.align === b.text.align &&
     a.text.color === b.text.color &&

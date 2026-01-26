@@ -94,27 +94,21 @@ export function Dashboard(): JSX.Element {
         <div className="p-4 border-b border-white/10 space-y-3">
           <Button
             fullWidth
-            onClick={handlePickInputDir}
+            onPress={handlePickInputDir}
             className="font-bold cursor-pointer"
             variant="outline"
             isDisabled={isRendering || isLoading}
-          >
-            {isLoading
-              ? 'Сканирование...'
-              : inputDir
-                ? 'Изменить входную папку'
-                : 'Выбрать входную папку'}
-          </Button>
+            {...({ children: isLoading ? 'Сканирование...' : inputDir ? 'Изменить входную папку' : 'Выбрать входную папку' } as any)}
+          />
 
           <Button
             fullWidth
-            onClick={() => actions.pickOutputDir()}
+            onPress={() => actions.pickOutputDir()}
             className="font-bold"
             variant="outline"
             isDisabled={isRendering || isLoading}
-          >
-            {outputDir ? 'Изменить папку вывода' : 'Выбрать папку вывода'}
-          </Button>
+            {...({ children: outputDir ? 'Изменить папку вывода' : 'Выбрать папку вывода' } as any)}
+          />
 
           <div className="text-xs text-default-500">
             {inputDir ? `Input: ${inputDir}` : 'Input не выбран'}
@@ -202,9 +196,8 @@ export function Dashboard(): JSX.Element {
               onPress={
                 isRendering ? () => processingActions.stop() : () => processingActions.renderAll()
               }
-            >
-              {isRendering ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ'}
-            </Button>
+              {...({ children: isRendering ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ' } as any)}
+            />
 
             {isRendering && (
               <div className="text-xs text-default-400 text-center">
@@ -221,9 +214,7 @@ export function Dashboard(): JSX.Element {
           <div className="p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs text-default-500">FFmpeg logs</div>
-              <Button size="sm" variant="light" onPress={() => processingActions.clearLogs()}>
-                Очистить
-              </Button>
+              <Button size="sm" variant="light" onPress={() => processingActions.clearLogs()} {...({ children: 'Очистить' } as any)} />
             </div>
 
             <ScrollShadow className="max-h-56 text-[11px] font-mono whitespace-pre-wrap">
