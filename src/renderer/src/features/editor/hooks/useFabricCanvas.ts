@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as fabric from 'fabric'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/fabricHelpers'
 
@@ -6,6 +6,8 @@ export const useFabricCanvas = () => {
   const hostRef = useRef<HTMLDivElement>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
   const isCanvasReadyRef = useRef(false)
+  // Добавляем стейт, чтобы оповестить остальные хуки о готовности
+  const [canvasInstance, setCanvasInstance] = useState<fabric.Canvas | null>(null)
 
   useEffect(() => {
     const host = hostRef.current
@@ -36,7 +38,9 @@ export const useFabricCanvas = () => {
     fabricRef.current = canvas
     isCanvasReadyRef.current = true
 
-    // Resize Observer logic (можно вынести, но для краткости оставим здесь)
+    // ВАЖНО: Устанавливаем инстанс в стейт, чтобы вызвать ре-рендер зависимых компонентов
+    setCanvasInstance(canvas)
+
     const ro = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         if (!isCanvasReadyRef.current || !fabricRef.current) return
@@ -48,7 +52,6 @@ export const useFabricCanvas = () => {
     })
     ro.observe(host)
 
-    // Initial offset calculation
     requestAnimationFrame(() => {
       if (!isCanvasReadyRef.current || !fabricRef.current) return
       fabricRef.current.calcOffset()
@@ -57,6 +60,7 @@ export const useFabricCanvas = () => {
 
     return () => {
       isCanvasReadyRef.current = false
+      setCanvasInstance(null) // Сбрасываем при размонтировании
       ro.disconnect()
 
       if (fabricRef.current === canvas) {
@@ -69,5 +73,5 @@ export const useFabricCanvas = () => {
     }
   }, [])
 
-  return { hostRef, fabricRef, isCanvasReadyRef }
+  return { hostRef, fabricRef, isCanvasReadyRef, canvasInstance }
 }

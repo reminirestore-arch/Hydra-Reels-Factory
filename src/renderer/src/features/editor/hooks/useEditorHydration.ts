@@ -13,6 +13,7 @@ import { OverlaySettings, StrategyProfileSettings } from '@shared/types'
 interface UseEditorHydrationProps {
   fabricRef: MutableRefObject<fabric.Canvas | null>
   isCanvasReadyRef: MutableRefObject<boolean>
+  canvasInstance: fabric.Canvas | null // Новое свойство
   filePath: string
   initialState?: object
   syncOverlayObjects: () => void
@@ -26,6 +27,7 @@ interface UseEditorHydrationProps {
 export const useEditorHydration = ({
   fabricRef,
   isCanvasReadyRef,
+  canvasInstance,
   filePath,
   initialState,
   syncOverlayObjects,
@@ -43,11 +45,11 @@ export const useEditorHydration = ({
 
   // Load Frame
   useEffect(() => {
-    const canvas = fabricRef.current
-    if (!canvas || !filePath) return
+    // ВАЖНО: Ждем, пока канва реально появится
+    if (!canvasInstance || !filePath) return
+    const canvas = canvasInstance
 
     const loadFrame = async (): Promise<void> => {
-      if (!isCanvasReadyRef.current) return
       try {
         const raw = await window.api.extractFrame(filePath)
         const imageUrl =
@@ -81,12 +83,13 @@ export const useEditorHydration = ({
       }
     }
     void loadFrame()
-  }, [filePath, fabricRef, isCanvasReadyRef, frameImageRef])
+  }, [filePath, canvasInstance, isCanvasReadyRef, frameImageRef])
 
   // Hydrate JSON
   useEffect(() => {
-    const canvas = fabricRef.current
-    if (!canvas) return
+    // ВАЖНО: Ждем, пока канва реально появится
+    if (!canvasInstance) return
+    const canvas = canvasInstance
     let isActive = true
 
     const finalizeHydration = (): void => {
@@ -139,7 +142,7 @@ export const useEditorHydration = ({
     return () => {
       isActive = false
     }
-  }, [filePath, initialState, fabricRef, isCanvasReadyRef, syncOverlayObjects])
+  }, [filePath, initialState, canvasInstance, isCanvasReadyRef, syncOverlayObjects, fabricRef])
 
   const handleSave = () => {
     const canvas = fabricRef.current

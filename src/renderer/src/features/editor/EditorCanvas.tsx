@@ -40,12 +40,14 @@ export const EditorCanvas = ({
   )
 
   // 2. Init Canvas
-  const { hostRef, fabricRef, isCanvasReadyRef } = useFabricCanvas()
+  // Получаем canvasInstance
+  const { hostRef, fabricRef, isCanvasReadyRef, canvasInstance } = useFabricCanvas()
 
   // 3. Init Logic
   const logic = useOverlayLogic({
     fabricRef,
     isCanvasReadyRef,
+    canvasInstance, // Передаем инстанс
     overlaySettings,
     setOverlaySettings,
     initialState
@@ -60,6 +62,7 @@ export const EditorCanvas = ({
   const hydration = useEditorHydration({
     fabricRef,
     isCanvasReadyRef,
+    canvasInstance, // Передаем инстанс
     filePath,
     initialState,
     syncOverlayObjects: logic.syncOverlayObjects,
@@ -101,7 +104,6 @@ export const EditorCanvas = ({
             const block = logic.getOverlayBlock(logic.selectedBlockId)
             if (block) {
               block.text.set({ text: val })
-              // Исправлено: добавлено as any, чтобы обойти строгую проверку типов события Fabric
               if (fabricRef.current) {
                 fabricRef.current.fire('text:changed', { target: block.text } as any)
               }
