@@ -164,7 +164,8 @@ export const useOverlayLogic = ({
 
       if (shouldReplace) {
         console.log('[useOverlayLogic] Restoring background image frame')
-        canvas.set('backgroundImage', frame)
+        canvas.backgroundVpt = false
+        canvas.backgroundImage = frame
         if (canvas.contextContainer) canvas.requestRenderAll()
       }
     },
