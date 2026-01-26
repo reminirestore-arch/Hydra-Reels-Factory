@@ -32,7 +32,7 @@ export const EditorCanvas = ({
   initialProfileSettings,
   onSave,
   onClose
-}: EditorCanvasProps): JSX.Element => {
+}: EditorCanvasProps): React.JSX.Element => {
   // 1. Core State
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() =>
     mergeOverlaySettings(initialOverlaySettings)
