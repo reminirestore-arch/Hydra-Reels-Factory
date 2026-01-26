@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import * as fabric from 'fabric'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 import { createDefaultStrategy } from '@shared/defaults'
 import { mergeOverlaySettings } from './utils/fabricHelpers'
@@ -105,7 +106,9 @@ export const EditorCanvas = ({
             if (block) {
               block.text.set({ text: val })
               if (fabricRef.current) {
-                fabricRef.current.fire('text:changed', { target: block.text } as any)
+                fabricRef.current.fire('text:changed', {
+                  target: block.text
+                } as fabric.TEvent)
               }
               fabricRef.current?.requestRenderAll()
             }

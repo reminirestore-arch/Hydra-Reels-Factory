@@ -20,7 +20,7 @@ interface UseEditorHydrationProps {
   filePath: string
   initialState?: object
   syncOverlayObjects: () => void
-  ensureFrameImage: () => void
+  ensureFrameImage: (imageUrl?: string) => void
   frameImageRef: MutableRef<fabric.FabricImage | null>
   overlaySettings: OverlaySettings
   profileSettings: StrategyProfileSettings
@@ -50,11 +50,13 @@ export const useEditorHydration = ({
   useEffect(() => {
     if (!canvasInstance || !filePath) return
     const canvas = canvasInstance
+    let isActive = true
 
     const loadFrame = async (): Promise<void> => {
       try {
         console.log('[Frontend] Requesting frame for:', filePath)
         const raw = await window.api.extractFrame(filePath)
+        if (!isActive) return
 
         let imageUrl =
           raw && typeof raw === 'object' && 'ok' in (raw as any)
@@ -68,14 +70,12 @@ export const useEditorHydration = ({
           return
         }
 
-        // Если это не data-url и не http, пробуем добавить file://
         if (
           !imageUrl.startsWith('data:') &&
           !imageUrl.startsWith('http') &&
           !imageUrl.startsWith('file://')
         ) {
           if (imageUrl.includes(':\\')) {
-            // Windows path
             imageUrl = 'file:///' + imageUrl.replace(/\\/g, '/')
           } else {
             imageUrl = 'file://' + imageUrl
@@ -84,8 +84,18 @@ export const useEditorHydration = ({
 
         console.log('[Frontend] Frame data received. Length:', imageUrl.length)
 
-        // Создаем изображение
+        const existingFrame = frameImageRef.current
+        const existingSrc =
+          existingFrame && ((existingFrame as any).src ?? (existingFrame as any).getSrc?.())
+
+        if (existingFrame && existingSrc === imageUrl) {
+          ensureFrameImage(imageUrl)
+          canvas.requestRenderAll()
+          return
+        }
+
         const img = await fabric.FabricImage.fromURL(imageUrl)
+        if (!isActive) return
 
         if (!img || !img.width || !img.height) {
           console.error('[Frontend] Failed to load FabricImage or dim is 0', img)
@@ -94,7 +104,6 @@ export const useEditorHydration = ({
 
         console.log(`[Frontend] Image loaded: ${img.width}x${img.height}`)
 
-        // Cover Logic
         const scaleX = CANVAS_WIDTH / img.width
         const scaleY = CANVAS_HEIGHT / img.height
         const scale = Math.max(scaleX, scaleY)
@@ -108,15 +117,12 @@ export const useEditorHydration = ({
           scaleY: scale,
           selectable: false,
           evented: false,
-          objectCaching: false, // Отключаем кэширование для фона (рекомендация v6)
-          excludeFromExport: true // Не сохранять в JSON (мы добавляем его отдельно)
+          objectCaching: false,
+          excludeFromExport: true
         })
 
-        // Сохраняем ссылку
-        ;(frameImageRef as any).current = img
-
-        // Устанавливаем фон через set (надежнее для v6)
-        canvas.set('backgroundImage', img)
+        frameImageRef.current = img
+        ensureFrameImage(imageUrl)
         canvas.requestRenderAll()
 
         console.log('[Frontend] Background image set successfully')
@@ -126,7 +132,11 @@ export const useEditorHydration = ({
     }
 
     void loadFrame()
-  }, [filePath, canvasInstance, frameImageRef])
+
+    return () => {
+      isActive = false
+    }
+  }, [filePath, canvasInstance, ensureFrameImage, frameImageRef])
 
   // Hydrate JSON
   useEffect(() => {
