@@ -1,15 +1,23 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": [
-    "src/renderer/src/env.d.ts",
-    "src/renderer/src/**/*",
-    "src/renderer/src/**/*.tsx",
-    "src/preload/*.d.ts",
-    "src/shared/**/*"
-  ],
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "composite": true,
+    "target": "esnext",
+    "module": "esnext",
+    "sourceMap": false,
+    "strict": true,
     "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": false,
+    "noImplicitReturns": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "composite": true,
     "baseUrl": ".",
     "paths": {
       "@renderer/*": [
@@ -17,5 +25,12 @@
       ],
       "@shared/*": ["src/shared/*"]
     }
-  }
+  },
+  "include": [
+    "src/renderer/src/env.d.ts",
+    "src/renderer/src/**/*",
+    "src/renderer/src/**/*.tsx",
+    "src/preload/*.d.ts",
+    "src/shared/**/*"
+  ]
 }
