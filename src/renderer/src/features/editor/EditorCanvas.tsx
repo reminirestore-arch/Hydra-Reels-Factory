@@ -738,7 +738,7 @@ export const EditorCanvas = ({
     ensureOverlayIds(canvas)
 
     const blocks = new Map<number, OverlayBlockDraft>()
-    const objects = canvas.getObjects()
+    const objects = canvas.getObjects() // В v7 это основной метод доступа
     for (const obj of objects) {
       const role = (obj as { data?: { role?: CanvasElementRole } }).data?.role
       const blockId = getBlockId(obj)
@@ -793,107 +793,75 @@ export const EditorCanvas = ({
     const canvas = fabricRef.current
     if (!canvas) return
 
+    // 1. Гарантируем, что у всех есть роли и ID
     ensureRolesOnObjects(canvas)
     ensureOverlayIds(canvas)
 
     const objects = canvas.getObjects()
-    const textObjects = objects.filter(
-      (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-text'
-    )
 
-    for (const obj of textObjects) {
-      if (obj.type === 'i-text' || obj.type === 'text') {
-        const legacyText = obj as fabric.IText | fabric.Text
-        const blockId = getBlockId(legacyText) ?? nextBlockIdRef.current++
+    // 2. Проходим по объектам, чтобы "подхватить" их настройки, но НЕ ПЕРЕСОЗДАЕМ их
+    for (const obj of objects) {
+      const anyObj = obj as any
+      const role = anyObj.data?.role
 
-        // Важно: при апгрейде текста берем стили ИЗ ОБЪЕКТА, а не из настроек
-        const upgradedText = buildTextObject(legacyText.text ?? 'Текст Рилса')
+      if (role === 'overlay-text') {
+        // Просто убедимся, что кэширование выключено для плавности
+        obj.set({ objectCaching: false })
 
-        upgradedText.set({
-          left: legacyText.left,
-          top: legacyText.top,
-          angle: legacyText.angle,
-          fill: legacyText.fill,
-          fontSize: legacyText.fontSize,
-          fontWeight: legacyText.fontWeight,
-          textAlign: legacyText.textAlign, // Сохраняем выравнивание объекта
-          objectCaching: false,
-          data: { ...(legacyText as any).data, role: 'overlay-text', blockId }
-        })
+        // Если это Textbox, настроим контролы, но не меняем текст/позицию
+        if (obj.type === 'textbox') {
+          configureTextControls(obj as OverlayText)
+        }
+      }
 
-        canvas.remove(legacyText)
-        canvas.add(upgradedText)
-      } else if (obj.type === 'textbox') {
-        const tb = obj as fabric.Textbox
-        ;(tb as any).data = { ...(tb as any).data, role: 'overlay-text' }
-        tb.set({ objectCaching: false })
-        configureTextControls(tb)
+      if (role === 'overlay-background') {
+        obj.set({ objectCaching: false })
       }
     }
 
+    // 3. Строим карту блоков для UI
     rebuildOverlayMap()
 
-    // Если ничего не выбрано (загрузка), выбираем первый блок для инициализации UI
-    if (!selectedBlockIdRef.current) {
-      const first = Array.from(overlayMapRef.current.values())[0]
-      if (first) {
-        setSelectedBlockId(first.id)
+    // 4. Если ничего не выбрано, выберем первый блок (актуально при первой загрузке)
+    if (!selectedBlockIdRef.current && overlayMapRef.current.size > 0) {
+      const firstBlock = Array.from(overlayMapRef.current.values())[0]
+      if (firstBlock) {
+        setSelectedBlockId(firstBlock.id)
 
-        // Синхронизируем UI с первым блоком
-        const derivedSettings = deriveOverlaySettingsFromBlock(first)
+        // Инициализируем UI настройки из ЭТОГО конкретного блока
+        const derivedSettings = deriveOverlaySettingsFromBlock(firstBlock)
         setOverlaySettings(derivedSettings)
-
-        // ВАЖНО: Обновляем рефы вручную, так как setState асинхронный
         overlaySettingsRef.current = derivedSettings
 
-        setTextValue(first.text.text ?? '')
-        textValueRef.current = first.text.text ?? ''
-
-        // Блокируем обратную синхронизацию на один тик, на всякий случай
-        syncingFromCanvasRef.current = true
-        setTimeout(() => {
-          syncingFromCanvasRef.current = false
-        }, 50)
+        setTextValue(firstBlock.text.text ?? '')
+        textValueRef.current = firstBlock.text.text ?? ''
       }
     }
 
-    if (overlayMapRef.current.size === 0) {
-      const blockId = nextBlockIdRef.current++
-      const block = createOverlayBlock(blockId, textValueRef.current)
-      overlayMapRef.current.set(blockId, block)
-
-      // Только для нового блока применяем текущие настройки
-      applyOverlaySettings()
-    }
-
+    // 5. Восстанавливаем связи (привязка текста к подложке)
     for (const block of overlayMapRef.current.values()) {
       const restored = restoreLinkFromText(block.background, block.text)
       if (!restored) {
         attachTextToBackground(block.background, block.text)
       }
       clampTextToBackground(block.background, block.text)
+
+      // Включаем интерактивность
       block.background.set({ selectable: true, evented: true, hasControls: true })
       block.text.set({ selectable: true, evented: true })
+
       canvas.bringObjectToFront(block.text)
     }
 
     ensureFrameImage()
     canvas.requestRenderAll()
-    rebuildOverlayMap()
-
-    // УДАЛЕНО: applyOverlaySettings()
-    // Мы не должны применять глобальные настройки ко всем загруженным объектам.
-    // Они уже имеют свои уникальные характеристики из JSON.
   }, [
-    applyOverlaySettings, // Можно убрать из зависимостей, если линтер позволяет
-    attachTextToBackground,
-    buildTextObject,
-    clampTextToBackground,
     configureTextControls,
-    createOverlayBlock,
     ensureFrameImage,
     rebuildOverlayMap,
     restoreLinkFromText,
+    attachTextToBackground,
+    clampTextToBackground,
     deriveOverlaySettingsFromBlock
   ])
 
@@ -904,19 +872,19 @@ export const EditorCanvas = ({
 
     const canUseCanvas = (): boolean => {
       const liveCanvas = fabricRef.current === canvas
-      const hasElements = Boolean((canvas as any).lowerCanvasEl && (canvas as any).upperCanvasEl)
-      return liveCanvas && hasElements
+      // В v6/v7 проверка на lowerCanvasEl надежнее
+      return liveCanvas && !!canvas.getElement()
     }
 
     const finalizeHydration = (): void => {
-      if (!canUseCanvas()) return
-      // важное место: гарантируем роли, иначе дальше любая логика будет “плыть”
-      ensureRolesOnObjects(canvas)
+      if (!canUseCanvas() || !isActive) return
+      console.log('Hydration finished, syncing objects...')
       syncOverlayObjects()
       ensureFrameImage()
       canvas.requestRenderAll()
     }
 
+    // Проверка на смену файла/стейта
     const lastHydration = lastHydrationRef.current
     const initialStateRef = initialState ?? null
     if (lastHydration.filePath !== filePath || lastHydration.initialState !== initialStateRef) {
@@ -932,49 +900,38 @@ export const EditorCanvas = ({
     didHydrateRef.current = true
 
     if (initialState) {
-      if (!canUseCanvas()) {
-        return () => {
-          isActive = false
-        }
-      }
-      let usedPromise = false
-      let hydratedState: object = initialState
+      let hydratedState: any = initialState
       try {
         hydratedState = cloneCanvasState(initialState)
       } catch (error) {
-        console.warn('Не удалось подготовить canvasState для загрузки.', error)
+        console.warn('Clone error:', error)
       }
 
-      try {
-        const maybePromise = canvas.loadFromJSON(hydratedState, () => {
-          if (!usedPromise) finalizeHydration()
+      // Fabric v6+ loadFromJSON возвращает Promise.
+      // Используем .then(), чтобы гарантировать выполнение ПОСЛЕ загрузки.
+      canvas
+        .loadFromJSON(hydratedState)
+        .then(() => {
+          finalizeHydration()
         })
-        usedPromise = Boolean((maybePromise as Promise<void> | undefined)?.then)
-        if (usedPromise) {
-          void (maybePromise as Promise<void>)
-            .then(() => {
-              finalizeHydration()
-            })
-            .catch((err) => {
-              if (!isActive || !canUseCanvas()) return
-              console.error('Ошибка восстановления канвы:', err)
-              syncOverlayObjects()
-            })
-        }
-      } catch (err) {
-        console.error('Ошибка запуска восстановления канвы:', err)
-        syncOverlayObjects()
-      }
+        .catch((err) => {
+          console.error('Ошибка восстановления канвы:', err)
+          // Даже при ошибке пытаемся синхронизировать то, что есть
+          finalizeHydration()
+        })
+
       return () => {
         isActive = false
       }
     }
 
-    syncOverlayObjects()
+    // Если нет initialState, просто инициализируем пустой редактор
+    finalizeHydration()
+
     return () => {
       isActive = false
     }
-  }, [ensureFrameImage, filePath, initialState, syncOverlayObjects])
+  }, [filePath, initialState, syncOverlayObjects, ensureFrameImage])
 
   useEffect(() => {
     applyOverlaySettings()
