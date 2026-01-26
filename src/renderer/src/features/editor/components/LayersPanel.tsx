@@ -1,5 +1,9 @@
 import { ScrollShadow } from '@heroui/react'
-import { CanvasElementNode, CanvasElementRole, OverlayBlock } from '@features/editor/utils/fabricHelpers'
+import {
+  CanvasElementNode,
+  CanvasElementRole,
+  OverlayBlock
+} from '@features/editor/utils/fabricHelpers'
 import * as fabric from 'fabric'
 
 interface LayersPanelProps {
@@ -16,8 +20,8 @@ export const LayersPanel = ({
   selectedBlockId,
   fabricRef,
   getOverlayBlock
-}: LayersPanelProps) => {
-  const handleSelect = (element: CanvasElementNode) => {
+}: LayersPanelProps): JSX.Element => {
+  const handleSelect = (element: CanvasElementNode): void => {
     if (element.role === 'frame') {
       fabricRef.current?.discardActiveObject()
       fabricRef.current?.requestRenderAll()

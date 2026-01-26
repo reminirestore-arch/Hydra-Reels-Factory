@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject, type MutableRefObject } from 'react'
 import * as fabric from 'fabric'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@features/editor/utils/fabricHelpers'
 
-export const useFabricCanvas = () => {
+export const useFabricCanvas = (): {
+  hostRef: RefObject<HTMLDivElement>
+  fabricRef: MutableRefObject<fabric.Canvas | null>
+  isCanvasReadyRef: MutableRefObject<boolean>
+  canvasInstance: fabric.Canvas | null
+} => {
   const hostRef = useRef<HTMLDivElement>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
   const isCanvasReadyRef = useRef(false)
@@ -39,7 +44,10 @@ export const useFabricCanvas = () => {
     isCanvasReadyRef.current = true
 
     // ВАЖНО: Устанавливаем инстанс в стейт, чтобы вызвать ре-рендер зависимых компонентов
-    setCanvasInstance(canvas)
+    // Используем requestAnimationFrame для избежания синхронного setState в effect
+    requestAnimationFrame(() => {
+      setCanvasInstance(canvas)
+    })
 
     const ro = new ResizeObserver(() => {
       requestAnimationFrame(() => {

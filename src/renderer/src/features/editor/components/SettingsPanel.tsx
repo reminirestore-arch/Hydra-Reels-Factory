@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Workaround for HeroUI components that don't accept children prop in TypeScript definitions
 import { Button, ScrollShadow, Slider, Label } from '@heroui/react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
@@ -38,7 +40,7 @@ export const SettingsPanel = ({
   onCenterText,
   onCenterBackground,
   updateCanvasText
-}: SettingsPanelProps) => {
+}: SettingsPanelProps): JSX.Element => {
   const profileConfig = (() => {
     switch (strategyId) {
       case 'IG1':
@@ -63,7 +65,7 @@ export const SettingsPanel = ({
     max: number,
     step: number,
     color: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'default' = 'primary'
-  ) => (
+  ): JSX.Element => (
     <Slider
       label={label}
       step={step}
@@ -78,7 +80,12 @@ export const SettingsPanel = ({
           <>
             <Label {...({ children: label, className: 'text-xs font-medium text-default-600' } as any)} />
             <Slider.Output {...({ className: 'text-xs font-bold text-default-600' } as any)} />
-            <Slider.Track {...({ className: 'bg-default-500/20', children: [<Slider.Fill key="fill" />, <Slider.Thumb key="thumb" />] } as any)} />
+            <Slider.Track
+              {...({
+                className: 'bg-default-500/20',
+                children: [<Slider.Fill key="fill" />, <Slider.Thumb key="thumb" />]
+              } as any)}
+            />
           </>
         )
       } as any)}
@@ -98,8 +105,7 @@ export const SettingsPanel = ({
           {renderSlider(
             'Старт (сек)',
             overlaySettings.timing.startTime,
-            (v) =>
-              setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, startTime: v } })),
+            (v) => setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, startTime: v } })),
             0,
             15,
             0.5,
@@ -120,7 +126,12 @@ export const SettingsPanel = ({
         <div className="space-y-4">
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Текст</div>
           <div className="space-y-2">
-            <Label {...({ children: 'Содержание', className: 'text-xs font-medium text-default-600' } as any)} />
+            <Label
+              {...({
+                children: 'Содержание',
+                className: 'text-xs font-medium text-default-600'
+              } as any)}
+            />
             <input
               type="text"
               value={textValue}
@@ -188,12 +199,32 @@ export const SettingsPanel = ({
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Вертикаль</span>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onPress={() => onAlignVertical('top')} {...({ children: <AlignVerticalJustifyStart size={14} /> } as any)} />
-              <Button size="sm" variant="ghost" onPress={() => onAlignVertical('center')} {...({ children: <AlignVerticalJustifyCenter size={14} /> } as any)} />
-              <Button size="sm" variant="ghost" onPress={() => onAlignVertical('bottom')} {...({ children: <AlignVerticalJustifyEnd size={14} /> } as any)} />
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={() => onAlignVertical('top')}
+                {...({ children: <AlignVerticalJustifyStart size={14} /> } as any)}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={() => onAlignVertical('center')}
+                {...({ children: <AlignVerticalJustifyCenter size={14} /> } as any)}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={() => onAlignVertical('bottom')}
+                {...({ children: <AlignVerticalJustifyEnd size={14} /> } as any)}
+              />
             </div>
           </div>
-          <Button size="sm" variant="ghost" onPress={onCenterText} {...({ children: 'Центрировать внутри подложки' } as any)} />
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={onCenterText}
+            {...({ children: 'Центрировать внутри подложки' } as any)}
+          />
         </div>
 
         {/* Background */}
@@ -204,8 +235,7 @@ export const SettingsPanel = ({
           {renderSlider(
             'Ширина',
             overlaySettings.background.width,
-            (v) =>
-              setOverlaySettings((p) => ({ ...p, background: { ...p.background, width: v } })),
+            (v) => setOverlaySettings((p) => ({ ...p, background: { ...p.background, width: v } })),
             120,
             600,
             10,
@@ -266,8 +296,18 @@ export const SettingsPanel = ({
             />
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onPress={() => onCenterBackground('horizontal')} {...({ children: 'Центр по горизонтали' } as any)} />
-            <Button size="sm" variant="ghost" onPress={() => onCenterBackground('vertical')} {...({ children: 'Центр по вертикали' } as any)} />
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => onCenterBackground('horizontal')}
+              {...({ children: 'Центр по горизонтали' } as any)}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => onCenterBackground('vertical')}
+              {...({ children: 'Центр по вертикали' } as any)}
+            />
           </div>
         </div>
 

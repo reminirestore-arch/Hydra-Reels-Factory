@@ -32,7 +32,7 @@ export const EditorCanvas = ({
   initialProfileSettings,
   onSave,
   onClose
-}: EditorCanvasProps) => {
+}: EditorCanvasProps): JSX.Element => {
   // 1. Core State
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() =>
     mergeOverlaySettings(initialOverlaySettings)
@@ -58,7 +58,8 @@ export const EditorCanvas = ({
   // 4. Update Setting Effect
   useEffect(() => {
     logic.applyOverlaySettings()
-  }, [logic.applyOverlaySettings, overlaySettings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logic, overlaySettings])
 
   // 5. Init Hydration
   const hydration = useEditorHydration({

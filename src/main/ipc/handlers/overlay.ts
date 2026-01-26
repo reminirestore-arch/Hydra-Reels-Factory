@@ -12,7 +12,10 @@ async function saveOverlayImpl(dataUrl: string): Promise<SaveOverlayResult> {
 export function registerOverlayHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(
     IPC.SaveOverlay,
-    async (_event: IpcMainInvokeEvent, args: SaveOverlayArgs): Promise<Result<SaveOverlayResult>> => {
+    async (
+      _event: IpcMainInvokeEvent,
+      args: SaveOverlayArgs
+    ): Promise<Result<SaveOverlayResult>> => {
       try {
         const dataUrl = args?.dataUrl ?? ''
         if (!dataUrl.startsWith('data:image/')) {

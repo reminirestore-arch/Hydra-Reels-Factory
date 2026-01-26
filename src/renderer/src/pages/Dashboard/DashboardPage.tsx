@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Workaround for HeroUI components that don't accept children prop in TypeScript definitions
 import type { JSX } from 'react'
 import { useState } from 'react'
 import { Button, Card, ScrollShadow, Chip, Avatar } from '@heroui/react'
@@ -98,7 +100,13 @@ export function Dashboard(): JSX.Element {
             className="font-bold cursor-pointer"
             variant="outline"
             isDisabled={isRendering || isLoading}
-            {...({ children: isLoading ? 'Сканирование...' : inputDir ? 'Изменить входную папку' : 'Выбрать входную папку' } as any)}
+            {...({
+              children: isLoading
+                ? 'Сканирование...'
+                : inputDir
+                  ? 'Изменить входную папку'
+                  : 'Выбрать входную папку'
+            } as any)}
           />
 
           <Button
@@ -133,9 +141,7 @@ export function Dashboard(): JSX.Element {
               <Card
                 key={file.id}
                 className={`w-full border border-white/5 bg-default-100/5 transition-all cursor-pointer hover:bg-white/5 active:scale-95 ${
-                  selectedFile?.id === file.id
-                    ? 'border-primary/50 bg-primary/10'
-                    : ''
+                  selectedFile?.id === file.id ? 'border-primary/50 bg-primary/10' : ''
                 }`}
               >
                 <div
@@ -156,9 +162,7 @@ export function Dashboard(): JSX.Element {
                   </Avatar>
 
                   <div className="flex-1 min-w-0 text-left">
-                    <div className="text-sm font-bold truncate text-white">
-                      {file.filename}
-                    </div>
+                    <div className="text-sm font-bold truncate text-white">{file.filename}</div>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Chip size="sm" className="h-5 text-[10px]">
                         КАСТОМ {customCount}/4
@@ -196,7 +200,9 @@ export function Dashboard(): JSX.Element {
               onPress={
                 isRendering ? () => processingActions.stop() : () => processingActions.renderAll()
               }
-              {...({ children: isRendering ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ' } as any)}
+              {...({
+                children: isRendering ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ'
+              } as any)}
             />
 
             {isRendering && (
@@ -214,7 +220,12 @@ export function Dashboard(): JSX.Element {
           <div className="p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs text-default-500">FFmpeg logs</div>
-              <Button size="sm" variant="light" onPress={() => processingActions.clearLogs()} {...({ children: 'Очистить' } as any)} />
+              <Button
+                size="sm"
+                variant="light"
+                onPress={() => processingActions.clearLogs()}
+                {...({ children: 'Очистить' } as any)}
+              />
             </div>
 
             <ScrollShadow className="max-h-56 text-[11px] font-mono whitespace-pre-wrap">

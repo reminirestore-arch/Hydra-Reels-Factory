@@ -5,7 +5,7 @@ interface CanvasContainerProps {
   hostRef: RefObject<HTMLDivElement | null>
 }
 
-export const CanvasContainer = ({ hostRef }: CanvasContainerProps) => {
+export const CanvasContainer = ({ hostRef }: CanvasContainerProps): JSX.Element => {
   return (
     <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-gray-900 to-black">
       <div className="relative shadow-2xl shadow-black ring-1 ring-white/10">

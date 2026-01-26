@@ -56,7 +56,7 @@ export const useEditorHydration = ({
   overlaySettings,
   profileSettings,
   onSave
-}: UseEditorHydrationProps) => {
+}: UseEditorHydrationProps): { handleSave: () => void } => {
   const didHydrateRef = useRef(false)
   const lastHydrationRef = useRef<{ filePath: string; initialState: object | null }>({
     filePath,
@@ -228,7 +228,7 @@ export const useEditorHydration = ({
     fabricRef
   ])
 
-  const handleSave = () => {
+  const handleSave = (): void => {
     const canvas = fabricRef.current
     if (!canvas || !isCanvasReadyRef.current) return
     const bg = canvas.backgroundImage

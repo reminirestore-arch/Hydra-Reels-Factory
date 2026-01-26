@@ -1,7 +1,6 @@
 import type { StrategyType } from '@shared/types'
 
-const normalize =
-  'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
+const normalize = 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
 
 function clampFadeStart(duration: number, fadeDur: number): number {
   const start = duration - fadeDur
