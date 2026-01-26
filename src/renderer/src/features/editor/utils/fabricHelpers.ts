@@ -71,6 +71,14 @@ export const getObjectBoundingRect = (
   return obj.getBoundingRect()
 }
 
+export const getEventTarget = <T extends fabric.Object = fabric.Object>(
+  event: fabric.TEvent
+): T | null => {
+  const target = event?.target
+  if (!target) return null
+  return target as T
+}
+
 export const mergeOverlaySettings = (incoming?: OverlaySettings): OverlaySettings => {
   const d = buildDefaultOverlaySettings()
   return {
