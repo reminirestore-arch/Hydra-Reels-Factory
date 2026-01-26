@@ -11,7 +11,7 @@ import {
   removeTempFile,
   waitForFile,
   cleanupTempFiles as cleanupTemp
-} from '../temp/tempFiles'
+} from '@services/temp/tempFiles'
 import { pickEncoderProfile } from './encoders'
 
 // Логируем путь к ffmpeg для отладки (будет видно в терминале)

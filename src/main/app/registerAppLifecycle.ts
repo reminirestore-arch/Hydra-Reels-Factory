@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { electronApp } from '@electron-toolkit/utils'
 import { createWindow } from './createWindow'
-import { registerIpcHandlers } from '../ipc'
-import { cleanupTempFiles } from '../services/ffmpeg'
+import { registerIpcHandlers } from '@ipc'
+import { cleanupTempFiles } from '@services/ffmpeg'
 
 export function registerAppLifecycle(): void {
   electronApp.setAppUserModelId('com.electron')

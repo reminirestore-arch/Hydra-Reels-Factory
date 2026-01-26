@@ -4,7 +4,7 @@ import { extname, join as pathJoin } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { VideoFile } from '@shared/types'
 import { createVideoFile } from '@shared/domain/video'
-import { extractFrameAsDataUrl, getVideoDuration } from '../ffmpeg'
+import { extractFrameAsDataUrl, getVideoDuration } from '@services/ffmpeg'
 
 const VIDEO_EXT = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv'])
 

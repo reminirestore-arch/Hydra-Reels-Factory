@@ -11,7 +11,7 @@ import type {
 } from '@shared/ipc/contracts'
 import { ok, err, toUnknownErr } from './_result'
 
-import { extractFrameAsDataUrl, renderStrategyVideo } from '../../services/ffmpeg'
+import { extractFrameAsDataUrl, renderStrategyVideo } from '@services/ffmpeg'
 
 async function extractFrameImpl(args: ExtractFrameArgs): Promise<ExtractFrameResult> {
   const { path: inputPath, strategyId, atSeconds } = args

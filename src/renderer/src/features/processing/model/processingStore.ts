@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { apiClient } from '../../../shared/api/apiClient'
-import { useFilesStore } from '../../files/model/filesStore'
+import { apiClient } from '@api/apiClient'
+import { useFilesStore } from '@features/files/model/filesStore'
 import type { StrategyType } from '@shared/types'
 import type { FfmpegLogEvent } from '@shared/ipc/contracts'
 

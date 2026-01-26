@@ -14,7 +14,7 @@ import {
   getObjectBoundingRect,
   getEventTarget,
   mergeOverlaySettings
-} from '../utils/fabricHelpers'
+} from '@features/editor/utils/fabricHelpers'
 import {
   getBlockId,
   ensureOverlayIds,

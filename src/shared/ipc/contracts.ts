@@ -1,5 +1,5 @@
 // src/shared/ipc/contracts.ts
-import type { StrategyType, VideoFile } from '../types'
+import type { StrategyType, VideoFile } from '@shared/types'
 
 export type IpcErrorCode =
   | 'CANCELLED'

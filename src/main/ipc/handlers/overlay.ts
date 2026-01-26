@@ -3,7 +3,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import { IPC } from '@shared/ipc/channels'
 import type { SaveOverlayArgs, SaveOverlayResult, Result } from '@shared/ipc/contracts'
 import { ok, err, toUnknownErr } from './_result'
-import { saveOverlayFromDataUrl } from '../../services/ffmpeg'
+import { saveOverlayFromDataUrl } from '@services/ffmpeg'
 
 async function saveOverlayImpl(dataUrl: string): Promise<SaveOverlayResult> {
   return saveOverlayFromDataUrl(dataUrl)

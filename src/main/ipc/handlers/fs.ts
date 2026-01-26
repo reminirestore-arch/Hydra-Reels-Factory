@@ -3,7 +3,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import { IPC } from '@shared/ipc/channels'
 import type { ScanFolderArgs, ScanFolderResult, Result } from '@shared/ipc/contracts'
 import { ok, err, toUnknownErr } from './_result'
-import { scanFolder } from '../../services/fs/scanFolder'
+import { scanFolder } from '@services/fs/scanFolder'
 
 async function scanFolderImpl(path: string): Promise<ScanFolderResult> {
   return scanFolder(path)

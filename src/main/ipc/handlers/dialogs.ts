@@ -15,7 +15,9 @@ async function pickDirectory(): Promise<string | null> {
     title: 'Select folder'
   }
   const parent = getDialogParentWindow()
-  const result = await dialog.showOpenDialog(parent ?? undefined, options)
+  const result = parent
+    ? await dialog.showOpenDialog(parent, options)
+    : await dialog.showOpenDialog(options)
   if (result.canceled || result.filePaths.length === 0) return null
   return result.filePaths[0] ?? null
 }

@@ -20,7 +20,12 @@
     "composite": true,
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["src/shared/*"],
+      "@main/*": ["src/main/*"],
+      "@services/*": ["src/main/services/*"],
+      "@ipc": ["./src/main/ipc"],
+      "@ipc/*": ["./src/main/ipc/*"],
+      "@resources/*": ["resources/*"]
     }
   },
   "include": [

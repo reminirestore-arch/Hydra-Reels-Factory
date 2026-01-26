@@ -7,9 +7,9 @@ import {
   mergeOverlaySettings,
   CANVAS_WIDTH,
   CANVAS_HEIGHT
-} from '../utils/fabricHelpers'
+} from '@features/editor/utils/fabricHelpers'
 import { OverlaySettings, StrategyProfileSettings } from '@shared/types'
-import type { OverlaySavePayload } from '../types'
+import type { OverlaySavePayload } from '@features/editor/types'
 
 // Локальный тип для ref
 type MutableRef<T> = { current: T }

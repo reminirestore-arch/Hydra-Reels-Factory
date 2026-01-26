@@ -2,12 +2,12 @@ import type { JSX } from 'react'
 import { useState } from 'react'
 import { Button, Card, ScrollShadow, Chip, Avatar } from '@heroui/react'
 import type { StrategyType, VideoFile } from '@shared/types'
-import { EditorPanel } from '../../features/editor/EditorPanel'
-import { EditorModal } from '../../features/editor/EditorModal'
-import { useFilesStore } from '../../features/files/model/filesStore'
-import { useProcessingStore } from '../../features/processing/model/processingStore'
-import { apiClient } from '../../shared/api/apiClient'
-import type { OverlaySavePayload } from '../../features/editor/types'
+import { EditorPanel } from '@features/editor/EditorPanel'
+import { EditorModal } from '@features/editor/EditorModal'
+import { useFilesStore } from '@features/files/model/filesStore'
+import { useProcessingStore } from '@features/processing/model/processingStore'
+import { apiClient } from '@api/apiClient'
+import type { OverlaySavePayload } from '@features/editor/types'
 
 const getCustomCount = (file: VideoFile): number => {
   return Object.values(file.strategies).filter((strategy) => strategy.status === 'custom').length

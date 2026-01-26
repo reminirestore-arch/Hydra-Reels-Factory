@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as fabric from 'fabric'
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/fabricHelpers'
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@features/editor/utils/fabricHelpers'
 
 export const useFabricCanvas = () => {
   const hostRef = useRef<HTMLDivElement>(null)

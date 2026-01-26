@@ -4,7 +4,7 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   clampRadius
-} from '../../utils/fabricHelpers'
+} from '@features/editor/utils/fabricHelpers'
 
 export const configureTextControls = (text: fabric.Textbox): void => {
   text.set({ lockUniScaling: true, objectCaching: false })

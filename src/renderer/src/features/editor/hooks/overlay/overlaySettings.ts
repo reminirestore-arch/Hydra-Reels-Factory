@@ -1,6 +1,6 @@
 import { OverlaySettings } from '@shared/types'
 import { buildDefaultOverlaySettings } from '@shared/defaults'
-import { OverlayBlock, mergeOverlaySettings } from '../../utils/fabricHelpers'
+import { OverlayBlock, mergeOverlaySettings } from '@features/editor/utils/fabricHelpers'
 import type { Textbox } from 'fabric'
 
 type MutableRef<T> = { current: T }

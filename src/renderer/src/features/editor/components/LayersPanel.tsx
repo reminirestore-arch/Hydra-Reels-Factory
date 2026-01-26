@@ -1,5 +1,5 @@
 import { ScrollShadow } from '@heroui/react'
-import { CanvasElementNode, CanvasElementRole, OverlayBlock } from '../utils/fabricHelpers'
+import { CanvasElementNode, CanvasElementRole, OverlayBlock } from '@features/editor/utils/fabricHelpers'
 import * as fabric from 'fabric'
 
 interface LayersPanelProps {

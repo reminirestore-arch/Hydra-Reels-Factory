@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { VideoFile } from '@shared/types'
-import { apiClient } from '../../../shared/api/apiClient'
+import { apiClient } from '@api/apiClient'
 
 type FilesState = {
   inputDir: string | null

@@ -1,5 +1,5 @@
 import { RefObject } from 'react'
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/fabricHelpers'
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@features/editor/utils/fabricHelpers'
 
 interface CanvasContainerProps {
   hostRef: RefObject<HTMLDivElement | null>
