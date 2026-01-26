@@ -51,7 +51,8 @@ const sanitizeCanvasObjects = (canvas: fabric.Canvas): void => {
 
 const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object => {
   sanitizeCanvasObjects(canvas)
-  const uniqueProps = new Set<string>(['data', ...extraProps])
+  // Убедитесь, что 'data' здесь есть
+  const uniqueProps = new Set<string>(['data', 'id', 'role', ...extraProps])
   const toJSON = canvas.toJSON as unknown as (props?: string[]) => object
   return toJSON.call(canvas, Array.from(uniqueProps))
 }
@@ -804,6 +805,8 @@ export const EditorCanvas = ({
       if (obj.type === 'i-text' || obj.type === 'text') {
         const legacyText = obj as fabric.IText | fabric.Text
         const blockId = getBlockId(legacyText) ?? nextBlockIdRef.current++
+
+        // Важно: при апгрейде текста берем стили ИЗ ОБЪЕКТА, а не из настроек
         const upgradedText = buildTextObject(legacyText.text ?? 'Текст Рилса')
 
         upgradedText.set({
@@ -813,7 +816,7 @@ export const EditorCanvas = ({
           fill: legacyText.fill,
           fontSize: legacyText.fontSize,
           fontWeight: legacyText.fontWeight,
-          textAlign: overlaySettingsRef.current.text.align,
+          textAlign: legacyText.textAlign, // Сохраняем выравнивание объекта
           objectCaching: false,
           data: { ...(legacyText as any).data, role: 'overlay-text', blockId }
         })
@@ -830,14 +833,27 @@ export const EditorCanvas = ({
 
     rebuildOverlayMap()
 
-    // If nothing is selected yet (e.g. right after loading), pick the first block
-    // so UI controls (alignment, etc.) have a stable target.
+    // Если ничего не выбрано (загрузка), выбираем первый блок для инициализации UI
     if (!selectedBlockIdRef.current) {
       const first = Array.from(overlayMapRef.current.values())[0]
       if (first) {
         setSelectedBlockId(first.id)
-        setOverlaySettings(deriveOverlaySettingsFromBlock(first))
+
+        // Синхронизируем UI с первым блоком
+        const derivedSettings = deriveOverlaySettingsFromBlock(first)
+        setOverlaySettings(derivedSettings)
+
+        // ВАЖНО: Обновляем рефы вручную, так как setState асинхронный
+        overlaySettingsRef.current = derivedSettings
+
         setTextValue(first.text.text ?? '')
+        textValueRef.current = first.text.text ?? ''
+
+        // Блокируем обратную синхронизацию на один тик, на всякий случай
+        syncingFromCanvasRef.current = true
+        setTimeout(() => {
+          syncingFromCanvasRef.current = false
+        }, 50)
       }
     }
 
@@ -845,6 +861,9 @@ export const EditorCanvas = ({
       const blockId = nextBlockIdRef.current++
       const block = createOverlayBlock(blockId, textValueRef.current)
       overlayMapRef.current.set(blockId, block)
+
+      // Только для нового блока применяем текущие настройки
+      applyOverlaySettings()
     }
 
     for (const block of overlayMapRef.current.values()) {
@@ -858,12 +877,15 @@ export const EditorCanvas = ({
       canvas.bringObjectToFront(block.text)
     }
 
-    applyOverlaySettings()
     ensureFrameImage()
     canvas.requestRenderAll()
     rebuildOverlayMap()
+
+    // УДАЛЕНО: applyOverlaySettings()
+    // Мы не должны применять глобальные настройки ко всем загруженным объектам.
+    // Они уже имеют свои уникальные характеристики из JSON.
   }, [
-    applyOverlaySettings,
+    applyOverlaySettings, // Можно убрать из зависимостей, если линтер позволяет
     attachTextToBackground,
     buildTextObject,
     clampTextToBackground,
