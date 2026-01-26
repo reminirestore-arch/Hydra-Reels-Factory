@@ -1,39 +1,43 @@
 import { JSX } from 'react'
-import { StrategyType, VideoFile } from '@shared/types'
 import { EditorCanvas } from './EditorCanvas'
+import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 
 interface EditorModalProps {
-  file: VideoFile
-  strategyId: StrategyType
+  isOpen: boolean
   onClose: () => void
-  onSave: (payload: {
-    canvasState: object
-    overlayDataUrl: string
-    textData: string
-    overlaySettings: VideoFile['strategies'][StrategyType]['overlaySettings']
-    profileSettings: VideoFile['strategies'][StrategyType]['profileSettings']
-  }) => void
+  filePath: string
+  strategyId: StrategyType
+  initialState?: object
+  initialOverlaySettings?: OverlaySettings
+  initialProfileSettings?: StrategyProfileSettings
+  onSave: (payload: any) => void
 }
 
 export const EditorModal = ({
-  file,
-  strategyId,
+  isOpen,
   onClose,
+  filePath,
+  strategyId,
+  initialState,
+  initialOverlaySettings,
+  initialProfileSettings,
   onSave
-}: EditorModalProps): JSX.Element => {
-  const strategy = file.strategies[strategyId]
+}: EditorModalProps): JSX.Element | null => {
+  if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col">
-      <EditorCanvas
-        filePath={file.fullPath}
-        strategyId={strategyId}
-        initialState={strategy.canvasState}
-        initialOverlaySettings={strategy.overlaySettings}
-        initialProfileSettings={strategy.profileSettings}
-        onClose={onClose}
-        onSave={onSave}
-      />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="relative flex h-[90vh] w-[90vw] max-w-7xl flex-col overflow-hidden rounded-xl bg-gray-900 shadow-2xl ring-1 ring-white/10">
+        <EditorCanvas
+          filePath={filePath}
+          strategyId={strategyId}
+          initialState={initialState}
+          initialOverlaySettings={initialOverlaySettings}
+          initialProfileSettings={initialProfileSettings}
+          onSave={onSave}
+          onClose={onClose}
+        />
+      </div>
     </div>
   )
 }
