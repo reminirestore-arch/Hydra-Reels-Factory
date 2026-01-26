@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as fabric from 'fabric'
 import { OverlaySettings } from '@shared/types'
 import { buildDefaultOverlaySettings } from '@shared/defaults'
@@ -15,10 +15,13 @@ import {
   mergeOverlaySettings
 } from '../utils/fabricHelpers'
 
+// Локальный тип для ref
+type MutableRef<T> = { current: T }
+
 interface UseOverlayLogicProps {
-  fabricRef: MutableRefObject<fabric.Canvas | null>
-  isCanvasReadyRef: MutableRefObject<boolean>
-  canvasInstance: fabric.Canvas | null // Новое свойство
+  fabricRef: MutableRef<fabric.Canvas | null>
+  isCanvasReadyRef: MutableRef<boolean>
+  canvasInstance: fabric.Canvas | null
   overlaySettings: OverlaySettings
   setOverlaySettings: (s: OverlaySettings) => void
   initialState?: object
@@ -78,7 +81,7 @@ export const useOverlayLogic = ({
     textValueRef.current = textValue
   }, [textValue])
 
-  // ... (Helpers: getBlockId, getOverlayBlock, etc. - БЕЗ ИЗМЕНЕНИЙ) ...
+  // --- Helpers ---
   const getBlockId = useCallback((obj?: fabric.Object | null): number | null => {
     const blockId = (obj as { data?: { blockId?: number } })?.data?.blockId
     return typeof blockId === 'number' && Number.isFinite(blockId) ? blockId : null
@@ -119,7 +122,7 @@ export const useOverlayLogic = ({
     }
   }, [fabricRef, isCanvasReadyRef])
 
-  // ... (Object Builders - БЕЗ ИЗМЕНЕНИЙ) ...
+  // --- Object Builders ---
   const buildTextObject = useCallback((textValueOverride?: string): fabric.Textbox => {
     const settings = overlaySettingsRef.current
     return new fabric.Textbox(textValueOverride ?? 'Текст Рилса', {
@@ -167,7 +170,7 @@ export const useOverlayLogic = ({
     })
   }, [])
 
-  // ... (Positioning Logic - БЕЗ ИЗМЕНЕНИЙ) ...
+  // --- Positioning Logic ---
   const clampTextToBackground = useCallback((background: fabric.Rect, text: OverlayText): void => {
     if (!background || !text) return
     background.setCoords()
@@ -312,7 +315,6 @@ export const useOverlayLogic = ({
     ]
   )
 
-  // ... (ensureRolesOnObjects, ensureOverlayIds, deriveOverlaySettingsFromBlock - БЕЗ ИЗМЕНЕНИЙ) ...
   const ensureRolesOnObjects = useCallback((canvas: fabric.Canvas): void => {
     const objects = canvas.getObjects()
     for (const obj of objects) {
@@ -320,7 +322,9 @@ export const useOverlayLogic = ({
       if (!anyObj.data) anyObj.data = {}
       if (
         !anyObj.data.role &&
-        (obj instanceof fabric.IText || obj instanceof fabric.Textbox || obj instanceof fabric.Text)
+        (obj instanceof fabric.IText ||
+          obj instanceof fabric.Textbox ||
+          obj instanceof fabric.FabricText)
       ) {
         anyObj.data.role = 'overlay-text'
       }
@@ -395,9 +399,7 @@ export const useOverlayLogic = ({
 
   const rebuildOverlayMap = useCallback((): void => {
     const canvas = fabricRef.current
-    // ТЕПЕРЬ ПРОВЕРЯЕМ ГОТОВНОСТЬ КАНВЫ
     if (!canvas || !isCanvasReadyRef.current) return
-
     ensureRolesOnObjects(canvas)
     ensureOverlayIds(canvas)
 
@@ -414,7 +416,9 @@ export const useOverlayLogic = ({
       }
       if (
         role === 'overlay-text' &&
-        (obj instanceof fabric.Textbox || obj instanceof fabric.IText || obj instanceof fabric.Text)
+        (obj instanceof fabric.Textbox ||
+          obj instanceof fabric.IText ||
+          obj instanceof fabric.FabricText)
       ) {
         blocks.set(blockId, { ...existing, id: blockId, text: obj as OverlayText })
       }
@@ -511,7 +515,6 @@ export const useOverlayLogic = ({
   const syncOverlayObjects = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas || !isCanvasReadyRef.current) return
-
     ensureRolesOnObjects(canvas)
     ensureOverlayIds(canvas)
 
@@ -529,7 +532,6 @@ export const useOverlayLogic = ({
 
     // Handle empty canvas or initial load
     if (overlayMapRef.current.size === 0) {
-      // Мы НЕ создаем дефолтный блок, если канва не готова или в ней уже что-то есть (даже если роль потерялась)
       const hasText = objects.some((o) => o instanceof fabric.Textbox || o instanceof fabric.IText)
       if (!hasText) {
         const blockId = nextBlockIdRef.current++
@@ -581,7 +583,7 @@ export const useOverlayLogic = ({
     isCanvasReadyRef
   ])
 
-  // ... (Public Actions, Alignment - БЕЗ ИЗМЕНЕНИЙ) ...
+  // --- Public Actions ---
   const addText = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas || !isCanvasReadyRef.current) return
@@ -597,11 +599,9 @@ export const useOverlayLogic = ({
 
   // --- Event Listeners ---
   useEffect(() => {
-    // ВАЖНО: Эффект запускается только когда canvasInstance существует
     if (!canvasInstance) return
     const canvas = canvasInstance
 
-    // (Весь код обработчиков событий оставляем без изменений, только используем canvas напрямую)
     const handleObjectMoving = (e: any) => {
       const target = e.target
       if (!target) return
@@ -615,7 +615,7 @@ export const useOverlayLogic = ({
       }
       canvas.requestRenderAll()
     }
-    // ... (остальные хендлеры: handleTextChanged, handleObjectScaling и т.д. те же самые) ...
+
     const handleTextChanged = (e: any) => {
       const target = e.target as OverlayText
       if (!target) return
@@ -751,7 +751,7 @@ export const useOverlayLogic = ({
     setOverlaySettings
   ])
 
-  // ... (Alignment Helpers - БЕЗ ИЗМЕНЕНИЙ) ...
+  // --- Alignment Helpers ---
   const alignTextInsideBackground = useCallback(
     (horizontal: 'left' | 'center' | 'right') => {
       const canvas = fabricRef.current
@@ -857,16 +857,19 @@ export const useOverlayLogic = ({
     setTextValue,
     canvasElements,
     frameImageRef,
+
     // Actions
     addText,
     syncOverlayObjects,
     ensureFrameImage,
     applyOverlaySettings,
+
     // Alignment
     alignTextInsideBackground,
     alignTextVertically,
     handleCenterText,
     handleCenterBackground,
+
     // Exposed Refs/Helpers if needed
     getOverlayBlock
   }

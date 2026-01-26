@@ -1,4 +1,4 @@
-import { useEffect, useRef, MutableRefObject } from 'react'
+import { useEffect, useRef } from 'react'
 import * as fabric from 'fabric'
 import {
   cloneCanvasState,
@@ -10,15 +10,18 @@ import {
 } from '../utils/fabricHelpers'
 import { OverlaySettings, StrategyProfileSettings } from '@shared/types'
 
+// Локальный тип для ref, чтобы избежать проблем с deprecation в типах React
+type MutableRef<T> = { current: T }
+
 interface UseEditorHydrationProps {
-  fabricRef: MutableRefObject<fabric.Canvas | null>
-  isCanvasReadyRef: MutableRefObject<boolean>
-  canvasInstance: fabric.Canvas | null // Новое свойство
+  fabricRef: MutableRef<fabric.Canvas | null>
+  isCanvasReadyRef: MutableRef<boolean>
+  canvasInstance: fabric.Canvas | null
   filePath: string
   initialState?: object
   syncOverlayObjects: () => void
   ensureFrameImage: () => void
-  frameImageRef: MutableRefObject<fabric.FabricImage | null>
+  frameImageRef: MutableRef<fabric.FabricImage | null>
   overlaySettings: OverlaySettings
   profileSettings: StrategyProfileSettings
   onSave: (payload: any) => void
@@ -45,7 +48,6 @@ export const useEditorHydration = ({
 
   // Load Frame
   useEffect(() => {
-    // ВАЖНО: Ждем, пока канва реально появится
     if (!canvasInstance || !filePath) return
     const canvas = canvasInstance
 
@@ -87,7 +89,6 @@ export const useEditorHydration = ({
 
   // Hydrate JSON
   useEffect(() => {
-    // ВАЖНО: Ждем, пока канва реально появится
     if (!canvasInstance) return
     const canvas = canvasInstance
     let isActive = true
@@ -96,6 +97,7 @@ export const useEditorHydration = ({
       if (!isActive || !isCanvasReadyRef.current) return
       try {
         syncOverlayObjects()
+        ensureFrameImage()
       } catch (e) {
         console.error('Error in syncOverlayObjects:', e)
       }
@@ -142,7 +144,15 @@ export const useEditorHydration = ({
     return () => {
       isActive = false
     }
-  }, [filePath, initialState, canvasInstance, isCanvasReadyRef, syncOverlayObjects, fabricRef])
+  }, [
+    filePath,
+    initialState,
+    canvasInstance,
+    isCanvasReadyRef,
+    syncOverlayObjects,
+    ensureFrameImage,
+    fabricRef
+  ])
 
   const handleSave = () => {
     const canvas = fabricRef.current
@@ -157,11 +167,12 @@ export const useEditorHydration = ({
 
       const textData = canvas
         .getObjects()
+        // ИСПРАВЛЕНО: fabric.Text -> fabric.FabricText
         .filter(
           (obj) =>
-            obj instanceof fabric.IText ||
-            obj instanceof fabric.Textbox ||
-            obj instanceof fabric.Text
+            (obj as any) instanceof fabric.IText ||
+            (obj as any) instanceof fabric.Textbox ||
+            (obj as any) instanceof fabric.FabricText
         )
         .map((obj) => (obj as OverlayText).text ?? '')
         .join(' ')
