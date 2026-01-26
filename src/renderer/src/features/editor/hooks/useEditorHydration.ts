@@ -94,7 +94,7 @@ export const useEditorHydration = ({
           return
         }
 
-        const img = await fabric.FabricImage.fromURL(imageUrl)
+        const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
         if (!isActive) return
 
         if (!img || !img.width || !img.height) {
@@ -122,6 +122,7 @@ export const useEditorHydration = ({
         })
 
         frameImageRef.current = img
+        canvas.backgroundImage = img
         ensureFrameImage(imageUrl)
         canvas.requestRenderAll()
 
@@ -248,7 +249,7 @@ export const useEditorHydration = ({
     } finally {
       if (bg) {
         // Восстанавливаем фон
-        canvas.set('backgroundImage', bg)
+        canvas.backgroundImage = bg
         canvas.requestRenderAll()
       }
     }
