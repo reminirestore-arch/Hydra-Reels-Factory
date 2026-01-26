@@ -101,8 +101,10 @@ export const EditorCanvas = ({
             const block = logic.getOverlayBlock(logic.selectedBlockId)
             if (block) {
               block.text.set({ text: val })
-              // Need to manually trigger sync because state update is async
-              if (fabricRef.current) fabricRef.current.fire('text:changed', { target: block.text })
+              // Исправлено: добавлено as any, чтобы обойти строгую проверку типов события Fabric
+              if (fabricRef.current) {
+                fabricRef.current.fire('text:changed', { target: block.text } as any)
+              }
               fabricRef.current?.requestRenderAll()
             }
           }}

@@ -2,7 +2,7 @@ import { RefObject } from 'react'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/fabricHelpers'
 
 interface CanvasContainerProps {
-  hostRef: RefObject<HTMLDivElement>
+  hostRef: RefObject<HTMLDivElement | null>
 }
 
 export const CanvasContainer = ({ hostRef }: CanvasContainerProps) => {
