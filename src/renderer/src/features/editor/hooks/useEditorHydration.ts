@@ -94,11 +94,17 @@ export const useEditorHydration = ({
           return
         }
 
-        const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
+        const imgEl = await fabric.util.loadImage(imageUrl, { crossOrigin: 'anonymous' })
         if (!isActive) return
 
-        if (!img || !img.width || !img.height) {
-          console.error('[Frontend] Failed to load FabricImage or dim is 0', img)
+        if (!imgEl || !(imgEl instanceof HTMLImageElement)) {
+          console.error('[Frontend] Failed to load HTMLImageElement for frame', imgEl)
+          return
+        }
+
+        const img = new fabric.FabricImage(imgEl)
+        if (!img.width || !img.height) {
+          console.error('[Frontend] Failed to init FabricImage or dim is 0', img)
           return
         }
 
@@ -122,6 +128,7 @@ export const useEditorHydration = ({
         })
 
         frameImageRef.current = img
+        canvas.backgroundVpt = false
         canvas.backgroundImage = img
         ensureFrameImage(imageUrl)
         canvas.requestRenderAll()
