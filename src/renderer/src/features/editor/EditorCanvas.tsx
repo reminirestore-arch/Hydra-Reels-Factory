@@ -3,6 +3,7 @@ import * as fabric from 'fabric'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 import { createDefaultStrategy } from '@shared/defaults'
 import { mergeOverlaySettings } from './utils/fabricHelpers'
+import type { OverlaySavePayload } from './types'
 
 import { useFabricCanvas } from './hooks/useFabricCanvas'
 import { useOverlayLogic } from './hooks/useOverlayLogic'
@@ -19,7 +20,7 @@ interface EditorCanvasProps {
   initialState?: object
   initialOverlaySettings?: OverlaySettings
   initialProfileSettings?: StrategyProfileSettings
-  onSave: (payload: any) => void
+  onSave: (payload: OverlaySavePayload) => void
   onClose: () => void
 }
 

@@ -1,4 +1,10 @@
-import type { Api, Result, FfmpegLogEvent } from '@shared/ipc/contracts'
+import type {
+  Api,
+  Result,
+  FfmpegLogEvent,
+  RenderStrategyPayload
+} from '@shared/ipc/contracts'
+import type { StrategyType } from '@shared/types'
 
 class IpcClientError extends Error {
   public code: string
@@ -20,10 +26,11 @@ export const apiClient = {
   selectFolder: async () => unwrap(await window.api.selectFolder()),
   selectOutputFolder: async () => unwrap(await window.api.selectOutputFolder()),
   scanFolder: async (path: string) => unwrap(await window.api.scanFolder(path)),
-  extractFrame: async (path: string, strategyId?: any, atSeconds?: number) =>
+  extractFrame: async (path: string, strategyId?: StrategyType, atSeconds?: number) =>
     unwrap(await window.api.extractFrame(path, strategyId, atSeconds)),
   saveOverlay: async (dataUrl: string) => unwrap(await window.api.saveOverlay(dataUrl)),
-  renderStrategy: async (payload: any) => unwrap(await window.api.renderStrategy(payload)),
+  renderStrategy: async (payload: RenderStrategyPayload) =>
+    unwrap(await window.api.renderStrategy(payload)),
   onFfmpegLog: (handler: (e: FfmpegLogEvent) => void) => {
     if (!window.api.onFfmpegLog) return () => {}
     return window.api.onFfmpegLog(handler)

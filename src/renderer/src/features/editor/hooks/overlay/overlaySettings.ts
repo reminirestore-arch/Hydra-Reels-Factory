@@ -1,8 +1,17 @@
 import { OverlaySettings } from '@shared/types'
 import { buildDefaultOverlaySettings } from '@shared/defaults'
 import { OverlayBlock, mergeOverlaySettings } from '../../utils/fabricHelpers'
+import type { Textbox } from 'fabric'
 
 type MutableRef<T> = { current: T }
+
+const normalizeTextAlign = (
+  align: Textbox['textAlign'],
+  fallback: OverlaySettings['text']['align']
+): OverlaySettings['text']['align'] => {
+  if (align === 'left' || align === 'center' || align === 'right') return align
+  return fallback
+}
 
 export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): boolean => {
   return (
@@ -31,7 +40,7 @@ export const deriveOverlaySettingsFromBlock = (
       ...overlaySettingsRef.current.text,
       fontSize: text.fontSize ?? defaults.text.fontSize,
       color: (text.fill as string) ?? defaults.text.color,
-      align: (text.textAlign as any) ?? defaults.text.align
+      align: normalizeTextAlign(text.textAlign, defaults.text.align)
     },
     background: {
       ...overlaySettingsRef.current.background,
