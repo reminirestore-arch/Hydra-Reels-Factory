@@ -1,5 +1,6 @@
 import { JSX } from 'react'
 import { EditorCanvas } from './EditorCanvas'
+import type { OverlaySavePayload } from './types'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 
 interface EditorModalProps {
@@ -10,7 +11,7 @@ interface EditorModalProps {
   initialState?: object
   initialOverlaySettings?: OverlaySettings
   initialProfileSettings?: StrategyProfileSettings
-  onSave: (payload: any) => void
+  onSave: (payload: OverlaySavePayload) => void
 }
 
 export const EditorModal = ({

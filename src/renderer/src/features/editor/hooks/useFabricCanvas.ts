@@ -32,7 +32,7 @@ export const useFabricCanvas = () => {
       enableRetinaScaling: false
     })
 
-    const wrapper = (canvas as any).wrapperEl as HTMLDivElement | undefined
+    const wrapper = canvas.wrapperEl
     if (wrapper) wrapper.style.touchAction = 'none'
 
     fabricRef.current = canvas

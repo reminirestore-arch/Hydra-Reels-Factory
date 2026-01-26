@@ -1,4 +1,5 @@
 import { Button, ScrollShadow, Slider, Label } from '@heroui/react'
+import type { Dispatch, SetStateAction } from 'react'
 import {
   AlignCenter,
   AlignLeft,
@@ -11,9 +12,9 @@ import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/
 
 interface SettingsPanelProps {
   overlaySettings: OverlaySettings
-  setOverlaySettings: (s: any) => void
+  setOverlaySettings: Dispatch<SetStateAction<OverlaySettings>>
   profileSettings: StrategyProfileSettings
-  setProfileSettings: (s: any) => void
+  setProfileSettings: Dispatch<SetStateAction<StrategyProfileSettings>>
   textValue: string
   setTextValue: (v: string) => void
   strategyId: StrategyType
@@ -83,6 +84,8 @@ export const SettingsPanel = ({
     </Slider>
   )
 
+  const alignOptions = ['left', 'center', 'right'] as const
+
   return (
     <aside className="w-96 border-l border-white/10 bg-black/60">
       <ScrollShadow className="h-full p-6 space-y-6">
@@ -95,7 +98,7 @@ export const SettingsPanel = ({
             'Старт (сек)',
             overlaySettings.timing.startTime,
             (v) =>
-              setOverlaySettings((p: any) => ({ ...p, timing: { ...p.timing, startTime: v } })),
+              setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, startTime: v } })),
             0,
             15,
             0.5,
@@ -104,7 +107,7 @@ export const SettingsPanel = ({
           {renderSlider(
             'Длительность (сек)',
             overlaySettings.timing.duration,
-            (v) => setOverlaySettings((p: any) => ({ ...p, timing: { ...p.timing, duration: v } })),
+            (v) => setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, duration: v } })),
             1,
             15,
             0.5,
@@ -131,7 +134,7 @@ export const SettingsPanel = ({
           {renderSlider(
             'Размер',
             overlaySettings.text.fontSize,
-            (v) => setOverlaySettings((p: any) => ({ ...p, text: { ...p.text, fontSize: v } })),
+            (v) => setOverlaySettings((p) => ({ ...p, text: { ...p.text, fontSize: v } })),
             18,
             96,
             2,
@@ -144,7 +147,7 @@ export const SettingsPanel = ({
               type="color"
               value={overlaySettings.text.color}
               onChange={(e) =>
-                setOverlaySettings((p: any) => ({
+                setOverlaySettings((p) => ({
                   ...p,
                   text: { ...p.text, color: e.target.value }
                 }))
@@ -156,14 +159,14 @@ export const SettingsPanel = ({
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Выравнивание</span>
             <div className="flex gap-1">
-              {['left', 'center', 'right'].map((align) => (
+              {alignOptions.map((align) => (
                 <Button
                   key={align}
                   size="sm"
                   variant={overlaySettings.text.align === align ? 'solid' : 'flat'}
                   onPress={() => {
-                    setOverlaySettings((p: any) => ({ ...p, text: { ...p.text, align } }))
-                    onAlignText(align as any)
+                    setOverlaySettings((p) => ({ ...p, text: { ...p.text, align } }))
+                    onAlignText(align)
                   }}
                   className="min-w-9"
                 >
@@ -207,7 +210,7 @@ export const SettingsPanel = ({
             'Ширина',
             overlaySettings.background.width,
             (v) =>
-              setOverlaySettings((p: any) => ({ ...p, background: { ...p.background, width: v } })),
+              setOverlaySettings((p) => ({ ...p, background: { ...p.background, width: v } })),
             120,
             600,
             10,
@@ -217,7 +220,7 @@ export const SettingsPanel = ({
             'Высота',
             overlaySettings.background.height,
             (v) =>
-              setOverlaySettings((p: any) => ({
+              setOverlaySettings((p) => ({
                 ...p,
                 background: { ...p.background, height: v }
               })),
@@ -230,7 +233,7 @@ export const SettingsPanel = ({
             'Скругление',
             overlaySettings.background.radius,
             (v) =>
-              setOverlaySettings((p: any) => ({
+              setOverlaySettings((p) => ({
                 ...p,
                 background: { ...p.background, radius: v }
               })),
@@ -243,7 +246,7 @@ export const SettingsPanel = ({
             'Прозрачность',
             overlaySettings.background.opacity,
             (v) =>
-              setOverlaySettings((p: any) => ({
+              setOverlaySettings((p) => ({
                 ...p,
                 background: { ...p.background, opacity: v }
               })),
@@ -259,7 +262,7 @@ export const SettingsPanel = ({
               type="color"
               value={overlaySettings.background.color}
               onChange={(e) =>
-                setOverlaySettings((p: any) => ({
+                setOverlaySettings((p) => ({
                   ...p,
                   background: { ...p.background, color: e.target.value }
                 }))
@@ -285,7 +288,7 @@ export const SettingsPanel = ({
           {renderSlider(
             profileConfig.label,
             profileSettings[profileConfig.key] as number,
-            (v) => setProfileSettings((p: any) => ({ ...p, [profileConfig.key]: v })),
+            (v) => setProfileSettings((p) => ({ ...p, [profileConfig.key]: v })),
             profileConfig.min,
             profileConfig.max,
             profileConfig.step,

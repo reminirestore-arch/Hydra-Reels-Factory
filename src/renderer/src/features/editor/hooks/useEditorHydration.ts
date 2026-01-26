@@ -9,9 +9,26 @@ import {
   CANVAS_HEIGHT
 } from '../utils/fabricHelpers'
 import { OverlaySettings, StrategyProfileSettings } from '@shared/types'
+import type { OverlaySavePayload } from '../types'
 
 // Локальный тип для ref
 type MutableRef<T> = { current: T }
+
+type FrameResponse = { ok: boolean; data?: unknown }
+
+const isFrameResponse = (value: unknown): value is FrameResponse =>
+  typeof value === 'object' && value !== null && 'ok' in value
+
+const extractImageUrl = (raw: unknown): string | null => {
+  if (isFrameResponse(raw)) {
+    if (!raw.ok) return null
+    return typeof raw.data === 'string' ? raw.data : null
+  }
+  return typeof raw === 'string' ? raw : null
+}
+
+const getFabricImageSource = (image?: fabric.FabricImage | null): string | undefined =>
+  image?.getSrc?.() ?? image?.src
 
 interface UseEditorHydrationProps {
   fabricRef: MutableRef<fabric.Canvas | null>
@@ -24,7 +41,7 @@ interface UseEditorHydrationProps {
   frameImageRef: MutableRef<fabric.FabricImage | null>
   overlaySettings: OverlaySettings
   profileSettings: StrategyProfileSettings
-  onSave: (payload: any) => void
+  onSave: (payload: OverlaySavePayload) => void
 }
 
 export const useEditorHydration = ({
@@ -58,12 +75,7 @@ export const useEditorHydration = ({
         const raw = await window.api.extractFrame(filePath)
         if (!isActive) return
 
-        let imageUrl =
-          raw && typeof raw === 'object' && 'ok' in (raw as any)
-            ? (raw as any).ok
-              ? (raw as any).data
-              : null
-            : (raw as any)
+        let imageUrl = extractImageUrl(raw)
 
         if (!imageUrl || typeof imageUrl !== 'string') {
           console.warn('[Frontend] Invalid image URL from extractFrame', raw)
@@ -85,8 +97,7 @@ export const useEditorHydration = ({
         console.log('[Frontend] Frame data received. Length:', imageUrl.length)
 
         const existingFrame = frameImageRef.current
-        const existingSrc =
-          existingFrame && ((existingFrame as any).src ?? (existingFrame as any).getSrc?.())
+        const existingSrc = getFabricImageSource(existingFrame)
 
         if (existingFrame && existingSrc === imageUrl) {
           ensureFrameImage(imageUrl)
@@ -180,7 +191,7 @@ export const useEditorHydration = ({
 
     if (initialState) {
       console.log('[Frontend] Hydrating JSON state...')
-      let hydratedState: any = initialState
+      let hydratedState: object = initialState
       try {
         hydratedState = cloneCanvasState(initialState)
       } catch (error) {
@@ -235,12 +246,12 @@ export const useEditorHydration = ({
       const textData = canvas
         .getObjects()
         .filter(
-          (obj) =>
-            (obj as any) instanceof fabric.IText ||
-            (obj as any) instanceof fabric.Textbox ||
-            (obj as any) instanceof fabric.FabricText
+          (obj): obj is OverlayText =>
+            obj instanceof fabric.IText ||
+            obj instanceof fabric.Textbox ||
+            obj instanceof fabric.FabricText
         )
-        .map((obj) => (obj as OverlayText).text ?? '')
+        .map((obj) => obj.text ?? '')
         .join(' ')
         .trim()
 

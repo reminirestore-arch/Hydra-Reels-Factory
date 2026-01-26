@@ -46,9 +46,8 @@ export const updateLinkOffsets = (background: fabric.Rect, text: OverlayText): v
   const localX = dx * cos - dy * sin
   const localY = dx * sin + dy * cos
 
-  const anyText = text as any
-  anyText.data = {
-    ...(anyText.data ?? {}),
+  text.data = {
+    ...(text.data ?? {}),
     link: {
       offsetX: localX / (background.scaleX ?? 1),
       offsetY: localY / (background.scaleY ?? 1),
@@ -63,7 +62,7 @@ export const attachTextToBackground = (background: fabric.Rect, text: OverlayTex
 
 export const syncTextWithBackground = (background: fabric.Rect, text: OverlayText): void => {
   if (!background || !text) return
-  const link = (text as any).data?.link
+  const link = text.data?.link
   if (!link) {
     updateLinkOffsets(background, text)
     return
@@ -97,7 +96,7 @@ export const syncTextWithBackground = (background: fabric.Rect, text: OverlayTex
 }
 
 export const restoreLinkFromText = (background: fabric.Rect, text: OverlayText): boolean => {
-  const link = (text as any).data?.link
+  const link = text.data?.link
   if (link && typeof link.offsetX === 'number') {
     syncTextWithBackground(background, text)
     return true

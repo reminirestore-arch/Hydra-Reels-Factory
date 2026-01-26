@@ -10,18 +10,17 @@ export const getBlockId = (obj?: fabric.Object | null): number | null => {
 export const ensureRolesOnObjects = (canvas: fabric.Canvas): void => {
   const objects = canvas.getObjects()
   for (const obj of objects) {
-    const anyObj = obj as any
-    if (!anyObj.data) anyObj.data = {}
+    if (!obj.data) obj.data = {}
     if (
-      !anyObj.data.role &&
+      !obj.data.role &&
       (obj instanceof fabric.IText ||
         obj instanceof fabric.Textbox ||
         obj instanceof fabric.FabricText)
     ) {
-      anyObj.data.role = 'overlay-text'
+      obj.data.role = 'overlay-text'
     }
-    if (!anyObj.data.role && obj instanceof fabric.Rect) {
-      anyObj.data.role = 'overlay-background'
+    if (!obj.data.role && obj instanceof fabric.Rect) {
+      obj.data.role = 'overlay-background'
     }
   }
 }
@@ -31,8 +30,8 @@ export const ensureOverlayIds = (
   nextBlockIdRef: MutableRef<number>
 ): void => {
   const objects = canvas.getObjects()
-  const backgrounds = objects.filter((obj) => (obj as any).data?.role === 'overlay-background')
-  const texts = objects.filter((obj) => (obj as any).data?.role === 'overlay-text')
+  const backgrounds = objects.filter((obj) => obj.data?.role === 'overlay-background')
+  const texts = objects.filter((obj) => obj.data?.role === 'overlay-text')
 
   const existingIds = new Set<number>()
   ;[...backgrounds, ...texts].forEach((obj) => {
@@ -41,7 +40,7 @@ export const ensureOverlayIds = (
   })
 
   let nextId = Math.max(0, ...existingIds) + 1
-  const assignId = (obj: any, blockId: number) => {
+  const assignId = (obj: fabric.Object, blockId: number) => {
     obj.data = { ...(obj.data ?? {}), blockId }
   }
 

@@ -1,17 +1,13 @@
 import type { JSX } from 'react'
 import { useState } from 'react'
 import { Button, Card, ScrollShadow, Chip, Avatar } from '@heroui/react'
-import type {
-  OverlaySettings,
-  StrategyProfileSettings,
-  StrategyType,
-  VideoFile
-} from '@shared/types'
+import type { StrategyType, VideoFile } from '@shared/types'
 import { EditorPanel } from '../../features/editor/EditorPanel'
 import { EditorModal } from '../../features/editor/EditorModal'
 import { useFilesStore } from '../../features/files/model/filesStore'
 import { useProcessingStore } from '../../features/processing/model/processingStore'
 import { apiClient } from '../../shared/api/apiClient'
+import type { OverlaySavePayload } from '../../features/editor/types'
 
 const getCustomCount = (file: VideoFile): number => {
   return Object.values(file.strategies).filter((strategy) => strategy.status === 'custom').length
@@ -41,24 +37,18 @@ export function Dashboard(): JSX.Element {
     setActiveStrategy(strategy)
   }
 
-  const handleSaveOverlay = async (payload: {
-    canvasState: object
-    overlayDataUrl: string
-    textData: string
-    overlaySettings: OverlaySettings
-    profileSettings: StrategyProfileSettings
-  }): Promise<void> => {
+  const handleSaveOverlay = async (payload: OverlaySavePayload): Promise<void> => {
     if (!selectedFile || !activeStrategy) return
 
     // ИСПРАВЛЕНИЕ: saveOverlay возвращает строку (путь), а не объект с полем path
     const overlayPath = await apiClient.saveOverlay(payload.overlayDataUrl)
 
     const next: VideoFile = {
-      ...(selectedFile as any),
+      ...selectedFile,
       strategies: {
-        ...(selectedFile as any).strategies,
+        ...selectedFile.strategies,
         [activeStrategy]: {
-          ...(selectedFile as any).strategies?.[activeStrategy],
+          ...selectedFile.strategies[activeStrategy],
           status: 'custom',
           overlayPath,
           canvasState: payload.canvasState,
@@ -96,7 +86,7 @@ export function Dashboard(): JSX.Element {
 
   // Вспомогательная переменная для извлечения данных текущей стратегии
   const activeStrategyData =
-    selectedFile && activeStrategy ? (selectedFile as any).strategies?.[activeStrategy] : null
+    selectedFile && activeStrategy ? selectedFile.strategies?.[activeStrategy] : null
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden font-sans text-foreground">
@@ -147,9 +137,9 @@ export function Dashboard(): JSX.Element {
 
             return (
               <Card
-                key={(file as any).id}
+                key={file.id}
                 className={`w-full border border-white/5 bg-default-100/5 transition-all cursor-pointer hover:bg-white/5 active:scale-95 ${
-                  (selectedFile as any)?.id === (file as any).id
+                  selectedFile?.id === file.id
                     ? 'border-primary/50 bg-primary/10'
                     : ''
                 }`}
@@ -162,8 +152,8 @@ export function Dashboard(): JSX.Element {
                 >
                   <Avatar className="w-16 h-16 rounded-lg bg-black/50 border border-white/5 shrink-0">
                     <Avatar.Image
-                      src={(file as any).thumbnailDataUrl}
-                      alt={(file as any).filename}
+                      src={file.thumbnailDataUrl}
+                      alt={file.filename}
                       className="object-cover w-full h-full"
                     />
                     <Avatar.Fallback className="text-xs text-default-500 font-bold">
@@ -173,7 +163,7 @@ export function Dashboard(): JSX.Element {
 
                   <div className="flex-1 min-w-0 text-left">
                     <div className="text-sm font-bold truncate text-white">
-                      {(file as any).filename}
+                      {file.filename}
                     </div>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Chip size="sm" className="h-5 text-[10px]">
@@ -268,7 +258,7 @@ export function Dashboard(): JSX.Element {
       {selectedFile && activeStrategy && (
         <EditorModal
           isOpen={true}
-          filePath={(selectedFile as any).path}
+          filePath={selectedFile.fullPath}
           strategyId={activeStrategy}
           initialState={activeStrategyData?.canvasState}
           initialOverlaySettings={activeStrategyData?.overlaySettings}

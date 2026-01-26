@@ -40,6 +40,9 @@ import {
 // Локальный тип для ref
 type MutableRef<T> = { current: T }
 
+const getFabricImageSource = (image?: fabric.FabricImage | null): string | undefined =>
+  image?.getSrc?.() ?? image?.src
+
 interface UseOverlayLogicProps {
   fabricRef: MutableRef<fabric.Canvas | null>
   isCanvasReadyRef: MutableRef<boolean>
@@ -160,7 +163,7 @@ export const useOverlayLogic = ({
       const shouldReplace =
         !current ||
         current !== frame ||
-        (imageUrl && (current as any).src !== imageUrl && (current as any).getSrc?.() !== imageUrl)
+        (imageUrl && getFabricImageSource(current) !== imageUrl)
 
       if (shouldReplace) {
         console.log('[useOverlayLogic] Restoring background image frame')
@@ -237,7 +240,7 @@ export const useOverlayLogic = ({
     const blocks = new Map<number, OverlayBlockDraft>()
     const objects = canvas.getObjects()
     for (const obj of objects) {
-      const role = (obj as any).data?.role
+      const role = obj.data?.role
       const blockId = getBlockId(obj)
       if (!blockId) continue
 
@@ -352,7 +355,7 @@ export const useOverlayLogic = ({
 
     const objects = canvas.getObjects()
     objects.forEach((obj) => {
-      const role = (obj as any).data?.role
+      const role = obj.data?.role
       if (role === 'overlay-text') {
         obj.set({ objectCaching: false })
         if (obj instanceof fabric.Textbox) configureTextControls(obj)
@@ -449,7 +452,7 @@ export const useOverlayLogic = ({
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
       if (!block) return
-      const role = (target as any).data?.role
+      const role = target.data?.role
       if (role === 'overlay-background') syncTextWithBackground(block.background, block.text)
       if (role === 'overlay-text') {
         clampTextToBackground(block.background, block.text)
@@ -473,7 +476,7 @@ export const useOverlayLogic = ({
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
       if (!block) return
-      const role = (target as any).data?.role
+      const role = target.data?.role
       if (role === 'overlay-background') syncTextWithBackground(block.background, block.text)
       if (role === 'overlay-text') {
         const t = block.text
@@ -487,7 +490,7 @@ export const useOverlayLogic = ({
       const target = getEventTarget<fabric.Object>(e)
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
-      if (block && (target as any).data?.role === 'overlay-background') {
+      if (block && target.data?.role === 'overlay-background') {
         syncTextWithBackground(block.background, block.text)
       }
     }
@@ -497,7 +500,7 @@ export const useOverlayLogic = ({
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
       if (!block) return
-      const role = (target as any).data?.role
+      const role = target.data?.role
 
       if (role === 'overlay-text') {
         const t = block.text
@@ -538,7 +541,7 @@ export const useOverlayLogic = ({
 
     const handleSelection = () => {
       const active = canvas.getActiveObject()
-      const role = (active as any)?.data?.role ?? null
+      const role = active?.data?.role ?? null
       const blockId = getBlockId(active)
       setSelectedRoleIfChanged(role)
       setSelectedBlockIdIfChanged(blockId)
