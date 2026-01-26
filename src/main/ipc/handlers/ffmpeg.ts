@@ -1,4 +1,3 @@
-// src/main/ipc/handlers/ffmpeg.ts
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import { IPC } from '@shared/ipc/channels'
@@ -16,6 +15,7 @@ import { extractFrameAsDataUrl, renderStrategyVideo } from '../../services/ffmpe
 
 async function extractFrameImpl(args: ExtractFrameArgs): Promise<ExtractFrameResult> {
   const { path: inputPath, strategyId, atSeconds } = args
+  console.log(`[IPC] extractFrameImpl called for: ${inputPath}`)
   return extractFrameAsDataUrl(inputPath, 450, 800, strategyId, atSeconds ?? 0)
 }
 
@@ -23,7 +23,9 @@ async function renderStrategyImpl(
   event: IpcMainInvokeEvent,
   payload: RenderStrategyPayload
 ): Promise<RenderStrategyResult> {
-  const outputName = payload.outputName.endsWith('.mp4') ? payload.outputName : `${payload.outputName}.mp4`
+  const outputName = payload.outputName.endsWith('.mp4')
+    ? payload.outputName
+    : `${payload.outputName}.mp4`
   const outputPath = path.join(payload.outputDir, outputName)
 
   const sendLog = (level: FfmpegLogEvent['level'], line: string): void => {
@@ -58,11 +60,16 @@ async function renderStrategyImpl(
 export function registerFfmpegHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(
     IPC.ExtractFrame,
-    async (_event: IpcMainInvokeEvent, args: ExtractFrameArgs): Promise<Result<ExtractFrameResult>> => {
+    async (
+      _event: IpcMainInvokeEvent,
+      args: ExtractFrameArgs
+    ): Promise<Result<ExtractFrameResult>> => {
       try {
         if (!args?.path) return err('VALIDATION', 'Path is required')
         return ok(await extractFrameImpl(args))
       } catch (e) {
+        // Теперь ошибка дойдет сюда из сервиса и будет отправлена фронтенду
+        console.error('[IPC] extractFrame error:', e)
         return toUnknownErr(e)
       }
     }

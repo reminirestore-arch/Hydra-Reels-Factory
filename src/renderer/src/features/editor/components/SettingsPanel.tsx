@@ -52,7 +52,8 @@ export const SettingsPanel = ({
     }
   })()
 
-  // Вспомогательная функция для HeroUI v3 Slider
+  // Вспомогательная функция, строго следующая анатомии HeroUI v3
+  // Label и Output должны быть прямыми детьми Slider
   const renderSlider = (
     label: string,
     value: number,
@@ -63,7 +64,7 @@ export const SettingsPanel = ({
     color: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'default' = 'primary'
   ) => (
     <Slider
-      aria-label={label}
+      label={label} // Используем проп label для надежности, если компонент Label внутри не рендерится
       step={step}
       maxValue={max}
       minValue={min}
@@ -71,11 +72,10 @@ export const SettingsPanel = ({
       onChange={(v) => onChange(v as number)}
       className="w-full"
       color={color}
+      // Передаем label как children, следуя документации
     >
-      <div className="flex justify-between mb-1">
-        <Label className="text-xs font-medium text-default-600">{label}</Label>
-        <Slider.Output className="text-xs font-bold text-default-600" />
-      </div>
+      <Label className="text-xs font-medium text-default-600">{label}</Label>
+      <Slider.Output className="text-xs font-bold text-default-600" />
       <Slider.Track className="bg-default-500/20">
         <Slider.Fill />
         <Slider.Thumb />
@@ -87,7 +87,7 @@ export const SettingsPanel = ({
     <aside className="w-96 border-l border-white/10 bg-black/60">
       <ScrollShadow className="h-full p-6 space-y-6">
         {/* Timing */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Тайминг текста
           </div>
@@ -113,7 +113,7 @@ export const SettingsPanel = ({
         </div>
 
         {/* Text */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">Текст</div>
           <div className="space-y-2">
             <Label className="text-xs font-medium text-default-600">Содержание</Label>
@@ -199,7 +199,7 @@ export const SettingsPanel = ({
         </div>
 
         {/* Background */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Подложка
           </div>
@@ -278,7 +278,7 @@ export const SettingsPanel = ({
         </div>
 
         {/* Profile */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Параметры профиля
           </div>

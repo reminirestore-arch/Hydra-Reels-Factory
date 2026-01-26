@@ -11,6 +11,8 @@ import {
 } from '../temp/tempFiles'
 import { pickEncoderProfile } from './encoders'
 
+// Логируем путь к ffmpeg для отладки (будет видно в терминале)
+console.log('FFmpeg path:', ffmpegPath)
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath.replace('app.asar', 'app.asar.unpacked'))
@@ -56,6 +58,8 @@ export async function extractFrameAsDataUrl(
       ? `${buildStrategyFilter(strategyId)},scale=${previewWidth}:${previewHeight}`
       : `scale=${previewWidth}:${previewHeight}`
 
+    console.log(`[FFmpeg] Extracting frame from ${inputPath} at ${atSeconds}s to ${tempPath}`)
+
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)
         .seekInput(String(atSeconds))
@@ -70,7 +74,10 @@ export async function extractFrameAsDataUrl(
             reject(e)
           }
         })
-        .on('error', (err) => reject(err))
+        .on('error', (err) => {
+          console.error('[FFmpeg] Error extraction:', err)
+          reject(err)
+        })
         .run()
     })
 
@@ -78,9 +85,10 @@ export async function extractFrameAsDataUrl(
     await removeTempFile(tempPath)
     return `data:image/jpeg;base64,${buffer.toString('base64')}`
   } catch (error) {
-    console.error('Extract frame error:', error)
+    // ВАЖНО: Не глушим ошибку, а пробрасываем её наверх, чтобы IPC вернул её фронтенду
+    console.error('Extract frame error details:', error)
     void removeTempFile(tempPath)
-    return ''
+    throw error
   }
 }
 
@@ -167,7 +175,6 @@ export const renderStrategyVideo = async (options: {
       ]
 
       if (!overlayPath) {
-        // no overlay: rely on default mapping. Still keep audio selection consistent.
         if (includeAudio) outputOptions.push('-b:a', profile.audioBitrate, '-c:a', 'aac')
         else outputOptions.push('-an')
       } else {
@@ -180,7 +187,6 @@ export const renderStrategyVideo = async (options: {
           onLog?.(line)
         })
         .on('progress', (p) => {
-          // p.timemark e.g. '00:00:03.12'
           const msg = p?.timemark ? `time=${p.timemark}` : JSON.stringify(p)
           onProgress?.(msg)
         })
@@ -198,7 +204,6 @@ export const renderStrategyVideo = async (options: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
 
-    // audio filter fallback
     if (
       includeAudio &&
       audioFilter &&
@@ -211,7 +216,6 @@ export const renderStrategyVideo = async (options: {
       return
     }
 
-    // encoder fallback
     if (profile.videoCodec !== 'libx264') {
       onLog?.(`Encoder ${profile.videoCodec} failed, retrying with libx264...`)
       await runWithProfile({ ...profile, videoCodec: 'libx264' }, audioFilter)

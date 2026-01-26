@@ -48,13 +48,12 @@ export const useEditorHydration = ({
 
   // Load Frame
   useEffect(() => {
-    // Ждем готовности канвы и наличия пути к файлу
     if (!canvasInstance || !filePath) return
     const canvas = canvasInstance
 
     const loadFrame = async (): Promise<void> => {
       try {
-        console.log('[useEditorHydration] Requesting frame for:', filePath)
+        console.log('[Frontend] Requesting frame for:', filePath)
         const raw = await window.api.extractFrame(filePath)
 
         let imageUrl =
@@ -65,11 +64,11 @@ export const useEditorHydration = ({
             : (raw as any)
 
         if (!imageUrl || typeof imageUrl !== 'string') {
-          console.warn('[useEditorHydration] Invalid image URL from extractFrame', raw)
+          console.warn('[Frontend] Invalid image URL from extractFrame', raw)
           return
         }
 
-        // --- FIX: Добавляем протокол file:// для локальных путей Windows/Unix, если его нет
+        // Добавляем протокол file:// для локальных путей, если его нет
         if (
           !imageUrl.startsWith('http') &&
           !imageUrl.startsWith('data:') &&
@@ -83,20 +82,17 @@ export const useEditorHydration = ({
           }
         }
 
-        console.log(
-          '[useEditorHydration] Loading image from URL:',
-          imageUrl.substring(0, 60) + '...'
-        )
+        console.log('[Frontend] Frame data received (length):', imageUrl.length)
 
-        // Создаем изображение
+        // Создаем изображение из URL
         const img = await fabric.FabricImage.fromURL(imageUrl)
 
         if (!img) {
-          console.error('[useEditorHydration] Failed to create FabricImage from URL')
+          console.error('[Frontend] Failed to create FabricImage')
           return
         }
 
-        // Вычисляем масштаб (Cover logic)
+        // Cover Logic
         const scaleX = CANVAS_WIDTH / img.width!
         const scaleY = CANVAS_HEIGHT / img.height!
         const scale = Math.max(scaleX, scaleY)
@@ -108,22 +104,23 @@ export const useEditorHydration = ({
           originY: 'center',
           scaleX: scale,
           scaleY: scale,
-          selectable: false, // Фон не должен выделяться
-          evented: false, // Фон не должен перехватывать события
+          selectable: false,
+          evented: false,
           objectCaching: false
         })
 
-        // Сохраняем ссылку и ставим фон
+        // Сохраняем ссылку
         ;(frameImageRef as any).current = img
+
+        // ИСПРАВЛЕНИЕ: Прямое присваивание свойства вместо setBackgroundImage
         canvas.backgroundImage = img
 
-        // Форсируем рендер
         if (canvas.contextContainer) {
           canvas.requestRenderAll()
-          console.log('[useEditorHydration] Frame rendered successfully')
+          console.log('[Frontend] Background image set and rendered')
         }
       } catch (err) {
-        console.error('[useEditorHydration] Error loading frame:', err)
+        console.error('[Frontend] Error loading frame:', err)
       }
     }
 
@@ -160,6 +157,7 @@ export const useEditorHydration = ({
     didHydrateRef.current = true
 
     if (initialState) {
+      console.log('[Frontend] Hydrating JSON state...')
       let hydratedState: any = initialState
       try {
         hydratedState = cloneCanvasState(initialState)
@@ -203,17 +201,9 @@ export const useEditorHydration = ({
     const bg = canvas.backgroundImage
 
     try {
-      // Убираем фон перед сохранением JSON, чтобы он не попал в структуру объектов (если он вдруг там есть)
       canvas.backgroundImage = undefined
 
       const exportScale = 1080 / CANVAS_WIDTH
-      // toDataURL с multiplier автоматически отрендерит все, включая фон (если бы он был image),
-      // но для превью нам нужен чистый снимок.
-      // ВАЖНО: Если мы хотим превью с фоном, надо вернуть bg перед toDataURL?
-      // Нет, обычно превью оверлея - это прозрачный PNG с текстом.
-      // Если вам нужно превью С ВИДЕО КАДРОМ, то нужно вернуть bg.
-      // В текущей логике мы сохраняем прозрачный PNG оверлея.
-
       const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
       const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data']))
 
@@ -240,8 +230,11 @@ export const useEditorHydration = ({
       console.error('Save failed:', e)
     } finally {
       if (bg) {
+        // ИСПРАВЛЕНИЕ: Восстанавливаем фон через прямое присваивание
         canvas.backgroundImage = bg
-        if (canvas.contextContainer) canvas.requestRenderAll()
+        if (canvas.contextContainer) {
+          canvas.requestRenderAll()
+        }
       }
     }
   }
