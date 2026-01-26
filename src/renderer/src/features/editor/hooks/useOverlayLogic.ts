@@ -116,8 +116,11 @@ export const useOverlayLogic = ({
     if (!canvas || !isCanvasReadyRef.current) return
     const frame = frameImageRef.current
     if (!frame) return
+
+    // Проверяем, установлен ли фон, и если нет или он другой - обновляем
     if (canvas.backgroundImage !== frame) {
-      canvas.backgroundImage = frame
+      console.log('[useOverlayLogic] Restoring background image frame')
+      canvas.set('backgroundImage', frame)
       if (canvas.contextContainer) canvas.requestRenderAll()
     }
   }, [fabricRef, isCanvasReadyRef])

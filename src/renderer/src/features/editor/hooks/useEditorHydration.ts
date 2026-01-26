@@ -68,33 +68,35 @@ export const useEditorHydration = ({
           return
         }
 
-        // Добавляем протокол file:// для локальных путей, если его нет
+        // Если это не data-url и не http, пробуем добавить file://
         if (
-          !imageUrl.startsWith('http') &&
           !imageUrl.startsWith('data:') &&
+          !imageUrl.startsWith('http') &&
           !imageUrl.startsWith('file://')
         ) {
-          // Если это Windows путь (C:\...), добавляем / перед ним для file:///
           if (imageUrl.includes(':\\')) {
+            // Windows path
             imageUrl = 'file:///' + imageUrl.replace(/\\/g, '/')
           } else {
             imageUrl = 'file://' + imageUrl
           }
         }
 
-        console.log('[Frontend] Frame data received (length):', imageUrl.length)
+        console.log('[Frontend] Frame data received. Length:', imageUrl.length)
 
-        // Создаем изображение из URL
+        // Создаем изображение
         const img = await fabric.FabricImage.fromURL(imageUrl)
 
-        if (!img) {
-          console.error('[Frontend] Failed to create FabricImage')
+        if (!img || !img.width || !img.height) {
+          console.error('[Frontend] Failed to load FabricImage or dim is 0', img)
           return
         }
 
+        console.log(`[Frontend] Image loaded: ${img.width}x${img.height}`)
+
         // Cover Logic
-        const scaleX = CANVAS_WIDTH / img.width!
-        const scaleY = CANVAS_HEIGHT / img.height!
+        const scaleX = CANVAS_WIDTH / img.width
+        const scaleY = CANVAS_HEIGHT / img.height
         const scale = Math.max(scaleX, scaleY)
 
         img.set({
@@ -106,19 +108,18 @@ export const useEditorHydration = ({
           scaleY: scale,
           selectable: false,
           evented: false,
-          objectCaching: false
+          objectCaching: false, // Отключаем кэширование для фона (рекомендация v6)
+          excludeFromExport: true // Не сохранять в JSON (мы добавляем его отдельно)
         })
 
         // Сохраняем ссылку
         ;(frameImageRef as any).current = img
 
-        // ИСПРАВЛЕНИЕ: Прямое присваивание свойства вместо setBackgroundImage
-        canvas.backgroundImage = img
+        // Устанавливаем фон через set (надежнее для v6)
+        canvas.set('backgroundImage', img)
+        canvas.requestRenderAll()
 
-        if (canvas.contextContainer) {
-          canvas.requestRenderAll()
-          console.log('[Frontend] Background image set and rendered')
-        }
+        console.log('[Frontend] Background image set successfully')
       } catch (err) {
         console.error('[Frontend] Error loading frame:', err)
       }
@@ -136,8 +137,11 @@ export const useEditorHydration = ({
     const finalizeHydration = (): void => {
       if (!isActive || !isCanvasReadyRef.current) return
       try {
+        console.log('[Frontend] Finalizing hydration...')
         syncOverlayObjects()
+        // Обязательно восстанавливаем фон, если JSON его стер
         ensureFrameImage()
+        canvas.requestRenderAll()
       } catch (e) {
         console.error('Error in syncOverlayObjects:', e)
       }
@@ -201,11 +205,14 @@ export const useEditorHydration = ({
     const bg = canvas.backgroundImage
 
     try {
+      // Убираем фон перед сохранением
       canvas.backgroundImage = undefined
 
       const exportScale = 1080 / CANVAS_WIDTH
       const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
-      const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data']))
+
+      // Исключаем лишнее из JSON
+      const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data', 'id', 'role']))
 
       const textData = canvas
         .getObjects()
@@ -230,11 +237,9 @@ export const useEditorHydration = ({
       console.error('Save failed:', e)
     } finally {
       if (bg) {
-        // ИСПРАВЛЕНИЕ: Восстанавливаем фон через прямое присваивание
-        canvas.backgroundImage = bg
-        if (canvas.contextContainer) {
-          canvas.requestRenderAll()
-        }
+        // Восстанавливаем фон
+        canvas.set('backgroundImage', bg)
+        canvas.requestRenderAll()
       }
     }
   }
