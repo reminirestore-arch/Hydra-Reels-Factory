@@ -1,3 +1,4 @@
+// src/renderer/src/features/editor/EditorCanvas.tsx
 import { useCallback, useEffect, useRef, useState, JSX } from 'react'
 import * as fabric from 'fabric'
 import { Button, ScrollShadow, Slider, Label } from '@heroui/react'
@@ -34,16 +35,16 @@ interface EditorCanvasProps {
 
 const CANVAS_WIDTH = 450
 const CANVAS_HEIGHT = 800
+
 const clampRadius = (radius: number, width: number, height: number): number =>
   Math.max(0, Math.min(radius, Math.min(width, height) / 2))
+
 const sanitizeCanvasObjects = (canvas: fabric.Canvas): void => {
   const anyCanvas = canvas as fabric.Canvas & {
     _objects?: Array<fabric.Object | undefined | null>
   }
   if (!Array.isArray(anyCanvas._objects)) return
-  const safeObjects = anyCanvas._objects.filter(
-    (obj): obj is fabric.Object => Boolean(obj)
-  )
+  const safeObjects = anyCanvas._objects.filter((obj): obj is fabric.Object => Boolean(obj))
   if (safeObjects.length !== anyCanvas._objects.length) {
     anyCanvas._objects = safeObjects
   }
@@ -51,7 +52,6 @@ const sanitizeCanvasObjects = (canvas: fabric.Canvas): void => {
 
 const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object => {
   sanitizeCanvasObjects(canvas)
-  // Убедитесь, что 'data' здесь есть
   const uniqueProps = new Set<string>(['data', 'id', 'role', ...extraProps])
   const toJSON = canvas.toJSON as unknown as (props?: string[]) => object
   return toJSON.call(canvas, Array.from(uniqueProps))
@@ -65,14 +65,9 @@ const cloneCanvasState = (state: object): object => {
       console.warn('Не удалось structuredClone для canvasState, fallback на JSON.', error)
     }
   }
-
   return JSON.parse(JSON.stringify(state)) as object
 }
 
-/**
- * Fabric: bounding boxes can be stale if coords weren't recalculated.
- * Always call `obj.setCoords()` before relying on the result.
- */
 const getObjectBoundingRect = (
   obj: fabric.Object
 ): ReturnType<fabric.Object['getBoundingRect']> => {
@@ -82,6 +77,7 @@ const getObjectBoundingRect = (
 
 type OverlayText = fabric.Textbox | fabric.IText | fabric.Text
 type CanvasElementRole = 'overlay-background' | 'overlay-text' | 'frame'
+
 interface OverlayBlock {
   id: number
   background: fabric.Rect
@@ -100,8 +96,6 @@ interface CanvasElementNode {
 
 const mergeOverlaySettings = (incoming?: OverlaySettings): OverlaySettings => {
   const d = buildDefaultOverlaySettings()
-
-  // Важно: глубокий merge, чтобы не потерять nested поля (color/opacity и т.п.)
   return {
     timing: {
       ...d.timing,
@@ -137,7 +131,9 @@ export const EditorCanvas = ({
 }: EditorCanvasProps): JSX.Element => {
   const hostRef = useRef<HTMLDivElement>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
-  const domGenRef = useRef(0)
+
+  // Ref для отслеживания готовности канвы (вместо domGenRef)
+  const isCanvasReadyRef = useRef(false)
 
   const frameImageRef = useRef<fabric.FabricImage | null>(null)
   const syncingFromCanvasRef = useRef(false)
@@ -161,6 +157,8 @@ export const EditorCanvas = ({
       }
     ).objects
 
+    // Исправление 1: Используем проверку типа через type только для JSON (где нет инстансов)
+    // но стараемся искать по роли
     const textObject = objects?.find(
       (obj) =>
         obj.data?.role === 'overlay-text' ||
@@ -176,6 +174,7 @@ export const EditorCanvas = ({
   const [selectedRole, setSelectedRole] = useState<CanvasElementRole | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
   const [canvasElements, setCanvasElements] = useState<CanvasElementNode[]>([])
+
   const overlaySettingsRef = useRef(overlaySettings)
   const selectedBlockIdRef = useRef<number | null>(selectedBlockId)
   const textValueRef = useRef(textValue)
@@ -185,24 +184,28 @@ export const EditorCanvas = ({
     initialState: initialState ?? null
   })
 
-  const getBlockId = (obj?: fabric.Object | null): number | null => {
+  // --- Helpers wrapped in useCallback for dependencies ---
+
+  const getBlockId = useCallback((obj?: fabric.Object | null): number | null => {
     const blockId = (obj as { data?: { blockId?: number } })?.data?.blockId
     return typeof blockId === 'number' && Number.isFinite(blockId) ? blockId : null
-  }
+  }, [])
 
-  const getOverlayBlock = (blockId?: number | null): OverlayBlock | null => {
+  const getOverlayBlock = useCallback((blockId?: number | null): OverlayBlock | null => {
     if (!blockId) return null
     return overlayMapRef.current.get(blockId) ?? null
-  }
+  }, [])
 
-  const getFallbackBlockId = (): number | null => {
+  const getFallbackBlockId = useCallback((): number | null => {
     const iterator = overlayMapRef.current.keys()
     const first = iterator.next()
     return first.done ? null : first.value
-  }
+  }, [])
 
-  const getActiveBlockId = (): number | null =>
-    selectedBlockIdRef.current ?? getFallbackBlockId()
+  const getActiveBlockId = useCallback(
+    (): number | null => selectedBlockIdRef.current ?? getFallbackBlockId(),
+    [getFallbackBlockId]
+  )
 
   const configureTextControls = useCallback((text: OverlayText): void => {
     text.set({
@@ -444,267 +447,75 @@ export const EditorCanvas = ({
     [syncTextWithBackground]
   )
 
-  useEffect(() => {
-    overlaySettingsRef.current = overlaySettings
-  }, [overlaySettings])
+  // --- Logic for ensuring IDs and Roles ---
 
-  useEffect(() => {
-    selectedBlockIdRef.current = selectedBlockId
-  }, [selectedBlockId])
-
-  useEffect(() => {
-    textValueRef.current = textValue
-  }, [textValue])
-
-  useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    if (fabricRef.current) return
-
-    const myGen = ++domGenRef.current
-    host.replaceChildren()
-
-    const el = document.createElement('canvas')
-    el.width = CANVAS_WIDTH
-    el.height = CANVAS_HEIGHT
-    el.style.width = `${CANVAS_WIDTH}px`
-    el.style.height = `${CANVAS_HEIGHT}px`
-    host.appendChild(el)
-
-    const canvas = new fabric.Canvas(el, {
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
-      backgroundColor: 'transparent',
-      preserveObjectStacking: true,
-      selection: true,
-      enableRetinaScaling: false
-    })
-
-    const wrapper = (canvas as any).wrapperEl as HTMLDivElement | undefined
-    if (wrapper) wrapper.style.touchAction = 'none'
-
-    overlayMapRef.current = new Map()
-    nextBlockIdRef.current = 1
-
-    const canUseCanvas = (): boolean => {
-      const liveCanvas = fabricRef.current === canvas
-      const hasElements = Boolean((canvas as any).lowerCanvasEl && (canvas as any).upperCanvasEl)
-      return liveCanvas && hasElements
-    }
-
-    requestAnimationFrame(() => {
-      if (!canUseCanvas()) return
-      canvas.calcOffset()
-      const ensureOffset = (): void => {
-        if (!canUseCanvas()) return
-        canvas.calcOffset()
-      }
-      canvas.on('mouse:down', ensureOffset)
-      canvas.requestRenderAll()
-    })
-
-    fabricRef.current = canvas
-
-    return () => {
-      if (fabricRef.current === canvas) fabricRef.current = null
-      canvas.off()
-
-      const stillMine = domGenRef.current === myGen
-      try {
-        canvas.dispose()
-      } finally {
-        if (stillMine) host.replaceChildren()
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const canvas = fabricRef.current
-    const host = hostRef.current
-    if (!canvas || !host) return
-
-    const canUseCanvas = (): boolean => {
-      const liveCanvas = fabricRef.current === canvas
-      const hasElements = Boolean((canvas as any).lowerCanvasEl && (canvas as any).upperCanvasEl)
-      return liveCanvas && hasElements
-    }
-
-    const ro = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        if (!canUseCanvas()) return
-        canvas.calcOffset()
-        canvas.requestRenderAll()
-      })
-    })
-
-    ro.observe(host)
-
-    requestAnimationFrame(() => {
-      if (!canUseCanvas()) return
-      canvas.calcOffset()
-      canvas.requestRenderAll()
-    })
-
-    return () => ro.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const canvas = fabricRef.current
-    if (!canvas || !filePath) return
-
-    const loadFrame = async (): Promise<void> => {
-      try {
-        const raw = await window.api.extractFrame(filePath)
-        const imageUrl =
-          raw && typeof raw === 'object' && 'ok' in (raw as any)
-            ? (raw as any).ok
-              ? (raw as any).data
-              : null
-            : (raw as any)
-        if (!imageUrl || typeof imageUrl !== 'string') return
-
-        const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
-
-        const scaleX = CANVAS_WIDTH / img.width!
-        const scaleY = CANVAS_HEIGHT / img.height!
-        const scale = Math.max(scaleX, scaleY)
-
-        img.set({
-          left: CANVAS_WIDTH / 2,
-          top: CANVAS_HEIGHT / 2,
-          originX: 'center',
-          originY: 'center',
-          scaleX: scale,
-          scaleY: scale
-        })
-
-        frameImageRef.current = img
-        canvas.backgroundImage = img
-        canvas.requestRenderAll()
-      } catch (err) {
-        console.error('Ошибка загрузки кадра:', err)
-      }
-    }
-
-    void loadFrame()
-  }, [filePath])
-
-  const applyOverlaySettings = useCallback((): void => {
-    const canvas = fabricRef.current
-    if (!canvas) return
-    if (syncingFromCanvasRef.current) return
-
-    const activeBlock = getOverlayBlock(getActiveBlockId())
-    if (!activeBlock) return
-
-    // “Safe” страховка, даже если кто-то подсунет кривые settings
-    const d = buildDefaultOverlaySettings()
-    const safe: OverlaySettings = mergeOverlaySettings(overlaySettingsRef.current)
-
-    const { text, background } = activeBlock
-
-    text.set({
-      fontSize: safe.text.fontSize ?? d.text.fontSize,
-      fill: safe.text.color ?? d.text.color,
-      textAlign: safe.text.align ?? d.text.align
-    })
-    text.setCoords()
-
-    const bw = safe.background.width ?? d.background.width
-    const bh = safe.background.height ?? d.background.height
-    const radius = clampRadius(safe.background.radius ?? 0, bw, bh)
-
-    background.set({
-      width: bw,
-      height: bh,
-      fill: safe.background.color ?? d.background.color,
-      opacity: safe.background.opacity ?? d.background.opacity,
-      rx: radius,
-      ry: radius
-    })
-    background.setCoords()
-
-    // keep user's textbox width, but never exceed background width
-    if (typeof text.width === 'number' && text.width > bw) {
-      text.set({ width: bw })
-      text.setCoords()
-    }
-
-    clampTextToBackground(background, text)
-    attachTextToBackground(background, text)
-    ensureFrameImage()
-    canvas.requestRenderAll()
-  }, [attachTextToBackground, clampTextToBackground, ensureFrameImage])
-
-  const ensureRolesOnObjects = (canvas: fabric.Canvas): void => {
+  const ensureRolesOnObjects = useCallback((canvas: fabric.Canvas): void => {
     const objects = canvas.getObjects()
     for (const obj of objects) {
       const anyObj = obj as any
       if (!anyObj.data) anyObj.data = {}
 
-      // если это текст, но role отсутствует — ставим
+      // Исправление 1: Используем instanceof вместо obj.type
       if (
         !anyObj.data.role &&
-        (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text')
+        (obj instanceof fabric.IText || obj instanceof fabric.Textbox || obj instanceof fabric.Text)
       ) {
         anyObj.data.role = 'overlay-text'
       }
 
-      // если это rect, но role отсутствует — ставим
-      if (!anyObj.data.role && obj.type === 'rect') {
+      if (!anyObj.data.role && obj instanceof fabric.Rect) {
         anyObj.data.role = 'overlay-background'
       }
     }
-  }
+  }, [])
 
-  /**
-   * Overlay architecture: every text + background pair shares a numeric blockId.
-   * We persist blockId + link offsets in object.data so load/save round-trips are lossless.
-   */
-  const ensureOverlayIds = (canvas: fabric.Canvas): void => {
-    const objects = canvas.getObjects()
-    const backgrounds = objects.filter(
-      (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-background'
-    )
-    const texts = objects.filter(
-      (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-text'
-    )
+  const ensureOverlayIds = useCallback(
+    (canvas: fabric.Canvas): void => {
+      const objects = canvas.getObjects()
+      const backgrounds = objects.filter(
+        (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-background'
+      )
+      const texts = objects.filter(
+        (obj) => (obj as { data?: { role?: string } }).data?.role === 'overlay-text'
+      )
 
-    const existingIds = new Set<number>()
-    for (const obj of [...backgrounds, ...texts]) {
-      const blockId = getBlockId(obj)
-      if (blockId) existingIds.add(blockId)
-    }
+      const existingIds = new Set<number>()
+      for (const obj of [...backgrounds, ...texts]) {
+        const blockId = getBlockId(obj)
+        if (blockId) existingIds.add(blockId)
+      }
 
-    let nextId = Math.max(0, ...existingIds) + 1
-    const assignId = (obj: fabric.Object, blockId: number): void => {
-      const anyObj = obj as any
-      anyObj.data = { ...(anyObj.data ?? {}), blockId }
-    }
+      let nextId = Math.max(0, ...existingIds) + 1
+      const assignId = (obj: fabric.Object, blockId: number): void => {
+        const anyObj = obj as any
+        anyObj.data = { ...(anyObj.data ?? {}), blockId }
+      }
 
-    if (existingIds.size === 0 && (backgrounds.length > 0 || texts.length > 0)) {
-      const pairCount = Math.max(backgrounds.length, texts.length)
+      if (existingIds.size === 0 && (backgrounds.length > 0 || texts.length > 0)) {
+        const pairCount = Math.max(backgrounds.length, texts.length)
+        for (let i = 0; i < pairCount; i += 1) {
+          const blockId = nextId++
+          if (backgrounds[i]) assignId(backgrounds[i], blockId)
+          if (texts[i]) assignId(texts[i], blockId)
+        }
+        nextBlockIdRef.current = nextId
+        return
+      }
+
+      const missingBackgrounds = backgrounds.filter((obj) => !getBlockId(obj))
+      const missingTexts = texts.filter((obj) => !getBlockId(obj))
+
+      const pairCount = Math.max(missingBackgrounds.length, missingTexts.length)
       for (let i = 0; i < pairCount; i += 1) {
         const blockId = nextId++
-        if (backgrounds[i]) assignId(backgrounds[i], blockId)
-        if (texts[i]) assignId(texts[i], blockId)
+        if (missingBackgrounds[i]) assignId(missingBackgrounds[i], blockId)
+        if (missingTexts[i]) assignId(missingTexts[i], blockId)
       }
-      nextBlockIdRef.current = nextId
-      return
-    }
 
-    const missingBackgrounds = backgrounds.filter((obj) => !getBlockId(obj))
-    const missingTexts = texts.filter((obj) => !getBlockId(obj))
-
-    const pairCount = Math.max(missingBackgrounds.length, missingTexts.length)
-    for (let i = 0; i < pairCount; i += 1) {
-      const blockId = nextId++
-      if (missingBackgrounds[i]) assignId(missingBackgrounds[i], blockId)
-      if (missingTexts[i]) assignId(missingTexts[i], blockId)
-    }
-
-    nextBlockIdRef.current = Math.max(nextBlockIdRef.current, nextId)
-  }
+      nextBlockIdRef.current = Math.max(nextBlockIdRef.current, nextId)
+    },
+    [getBlockId]
+  )
 
   const deriveOverlaySettingsFromBlock = useCallback((block: OverlayBlock): OverlaySettings => {
     const defaults = buildDefaultOverlaySettings()
@@ -738,19 +549,23 @@ export const EditorCanvas = ({
     ensureOverlayIds(canvas)
 
     const blocks = new Map<number, OverlayBlockDraft>()
-    const objects = canvas.getObjects() // В v7 это основной метод доступа
+    const objects = canvas.getObjects()
     for (const obj of objects) {
       const role = (obj as { data?: { role?: CanvasElementRole } }).data?.role
       const blockId = getBlockId(obj)
       if (!blockId) continue
 
       const existing = blocks.get(blockId) ?? ({ id: blockId } as OverlayBlockDraft)
-      if (role === 'overlay-background' && obj.type === 'rect') {
-        blocks.set(blockId, { ...existing, id: blockId, background: obj as fabric.Rect })
+
+      // Исправление 1: instanceof
+      if (role === 'overlay-background' && obj instanceof fabric.Rect) {
+        blocks.set(blockId, { ...existing, id: blockId, background: obj })
       }
+
+      // Исправление 1: instanceof
       if (
         role === 'overlay-text' &&
-        (obj.type === 'textbox' || obj.type === 'i-text' || obj.type === 'text')
+        (obj instanceof fabric.Textbox || obj instanceof fabric.IText || obj instanceof fabric.Text)
       ) {
         blocks.set(blockId, { ...existing, id: blockId, text: obj as OverlayText })
       }
@@ -787,30 +602,87 @@ export const EditorCanvas = ({
       setOverlaySettings(deriveOverlaySettingsFromBlock(fallbackBlock))
       setTextValue(fallbackBlock.text.text ?? '')
     }
-  }, [deriveOverlaySettingsFromBlock])
+  }, [
+    deriveOverlaySettingsFromBlock,
+    ensureOverlayIds,
+    ensureRolesOnObjects,
+    getActiveBlockId,
+    getBlockId,
+    getOverlayBlock
+  ])
+
+  // Исправление 5: Добавлены getActiveBlockId, ensureFrameImage, clampTextToBackground
+  const applyOverlaySettings = useCallback((): void => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+    if (syncingFromCanvasRef.current) return
+
+    const activeBlock = getOverlayBlock(getActiveBlockId())
+    if (!activeBlock) return
+
+    const d = buildDefaultOverlaySettings()
+    const safe: OverlaySettings = mergeOverlaySettings(overlaySettingsRef.current)
+
+    const { text, background } = activeBlock
+
+    text.set({
+      fontSize: safe.text.fontSize ?? d.text.fontSize,
+      fill: safe.text.color ?? d.text.color,
+      textAlign: safe.text.align ?? d.text.align
+    })
+    text.setCoords()
+
+    const bw = safe.background.width ?? d.background.width
+    const bh = safe.background.height ?? d.background.height
+    const radius = clampRadius(safe.background.radius ?? 0, bw, bh)
+
+    background.set({
+      width: bw,
+      height: bh,
+      fill: safe.background.color ?? d.background.color,
+      opacity: safe.background.opacity ?? d.background.opacity,
+      rx: radius,
+      ry: radius
+    })
+    background.setCoords()
+
+    // Исправление 4: Убрана лишняя проверка typeof text.width
+    if (text.width > bw) {
+      text.set({ width: bw })
+      text.setCoords()
+    }
+
+    clampTextToBackground(background, text)
+    attachTextToBackground(background, text)
+    ensureFrameImage()
+    canvas.requestRenderAll()
+  }, [
+    attachTextToBackground,
+    clampTextToBackground,
+    ensureFrameImage,
+    getActiveBlockId,
+    getOverlayBlock
+  ])
+
+  // --- Main Sync Logic ---
 
   const syncOverlayObjects = useCallback((): void => {
     const canvas = fabricRef.current
     if (!canvas) return
 
-    // 1. Гарантируем, что у всех есть роли и ID
     ensureRolesOnObjects(canvas)
     ensureOverlayIds(canvas)
 
     const objects = canvas.getObjects()
-
-    // 2. Проходим по объектам, чтобы "подхватить" их настройки, но НЕ ПЕРЕСОЗДАЕМ их
     for (const obj of objects) {
       const anyObj = obj as any
       const role = anyObj.data?.role
 
       if (role === 'overlay-text') {
-        // Просто убедимся, что кэширование выключено для плавности
         obj.set({ objectCaching: false })
-
-        // Если это Textbox, настроим контролы, но не меняем текст/позицию
-        if (obj.type === 'textbox') {
-          configureTextControls(obj as OverlayText)
+        // Исправление 1: instanceof
+        if (obj instanceof fabric.Textbox) {
+          configureTextControls(obj)
         }
       }
 
@@ -819,72 +691,222 @@ export const EditorCanvas = ({
       }
     }
 
-    // 3. Строим карту блоков для UI
     rebuildOverlayMap()
 
-    // 4. Если ничего не выбрано, выберем первый блок (актуально при первой загрузке)
     if (!selectedBlockIdRef.current && overlayMapRef.current.size > 0) {
       const firstBlock = Array.from(overlayMapRef.current.values())[0]
       if (firstBlock) {
         setSelectedBlockId(firstBlock.id)
-
-        // Инициализируем UI настройки из ЭТОГО конкретного блока
         const derivedSettings = deriveOverlaySettingsFromBlock(firstBlock)
         setOverlaySettings(derivedSettings)
         overlaySettingsRef.current = derivedSettings
-
         setTextValue(firstBlock.text.text ?? '')
         textValueRef.current = firstBlock.text.text ?? ''
+
+        syncingFromCanvasRef.current = true
+        setTimeout(() => {
+          syncingFromCanvasRef.current = false
+        }, 50)
       }
     }
 
-    // 5. Восстанавливаем связи (привязка текста к подложке)
+    if (overlayMapRef.current.size === 0) {
+      const blockId = nextBlockIdRef.current++
+      const block = createOverlayBlock(blockId, textValueRef.current)
+      overlayMapRef.current.set(blockId, block)
+      applyOverlaySettings()
+    }
+
     for (const block of overlayMapRef.current.values()) {
       const restored = restoreLinkFromText(block.background, block.text)
       if (!restored) {
         attachTextToBackground(block.background, block.text)
       }
       clampTextToBackground(block.background, block.text)
-
-      // Включаем интерактивность
       block.background.set({ selectable: true, evented: true, hasControls: true })
       block.text.set({ selectable: true, evented: true })
-
       canvas.bringObjectToFront(block.text)
     }
 
     ensureFrameImage()
     canvas.requestRenderAll()
+    rebuildOverlayMap()
   }, [
-    configureTextControls,
-    ensureFrameImage,
-    rebuildOverlayMap,
-    restoreLinkFromText,
+    applyOverlaySettings,
     attachTextToBackground,
     clampTextToBackground,
-    deriveOverlaySettingsFromBlock
+    configureTextControls,
+    createOverlayBlock,
+    deriveOverlaySettingsFromBlock,
+    ensureFrameImage,
+    ensureOverlayIds,
+    ensureRolesOnObjects,
+    rebuildOverlayMap,
+    restoreLinkFromText
   ])
 
+  // --- Effects ---
+
+  useEffect(() => {
+    overlaySettingsRef.current = overlaySettings
+  }, [overlaySettings])
+
+  useEffect(() => {
+    selectedBlockIdRef.current = selectedBlockId
+  }, [selectedBlockId])
+
+  useEffect(() => {
+    textValueRef.current = textValue
+  }, [textValue])
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    if (fabricRef.current) return
+
+    host.replaceChildren()
+
+    const el = document.createElement('canvas')
+    el.width = CANVAS_WIDTH
+    el.height = CANVAS_HEIGHT
+    el.style.width = `${CANVAS_WIDTH}px`
+    el.style.height = `${CANVAS_HEIGHT}px`
+    host.appendChild(el)
+
+    const canvas = new fabric.Canvas(el, {
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
+      backgroundColor: 'transparent',
+      preserveObjectStacking: true,
+      selection: true,
+      enableRetinaScaling: false
+    })
+
+    const wrapper = (canvas as any).wrapperEl as HTMLDivElement | undefined
+    if (wrapper) wrapper.style.touchAction = 'none'
+
+    fabricRef.current = canvas
+    isCanvasReadyRef.current = true // Маркер готовности для Strict Mode
+
+    overlayMapRef.current = new Map()
+    nextBlockIdRef.current = 1
+
+    const canUseCanvas = (): boolean => {
+      // Исправление 2: Используем ref для проверки, а не domGenRef
+      return fabricRef.current === canvas && isCanvasReadyRef.current
+    }
+
+    requestAnimationFrame(() => {
+      if (!canUseCanvas()) return
+      canvas.calcOffset()
+      const ensureOffset = (): void => {
+        if (!canUseCanvas()) return
+        canvas.calcOffset()
+      }
+      canvas.on('mouse:down', ensureOffset)
+      canvas.requestRenderAll()
+    })
+
+    return () => {
+      isCanvasReadyRef.current = false // Помечаем уничтоженным
+      if (fabricRef.current === canvas) fabricRef.current = null
+      canvas.off()
+
+      // Исправление 3: Обрабатываем промис dispose
+      canvas.dispose().catch((err) => console.warn('Canvas dispose error:', err))
+      host.replaceChildren()
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = fabricRef.current
+    const host = hostRef.current
+    if (!canvas || !host) return
+
+    const canUseCanvas = (): boolean => {
+      return fabricRef.current === canvas && isCanvasReadyRef.current
+    }
+
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        if (!canUseCanvas()) return
+        canvas.calcOffset()
+        canvas.requestRenderAll()
+      })
+    })
+
+    ro.observe(host)
+    requestAnimationFrame(() => {
+      if (!canUseCanvas()) return
+      canvas.calcOffset()
+      canvas.requestRenderAll()
+    })
+
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !filePath) return
+
+    const loadFrame = async (): Promise<void> => {
+      if (!isCanvasReadyRef.current) return
+      try {
+        const raw = await window.api.extractFrame(filePath)
+        const imageUrl =
+          raw && typeof raw === 'object' && 'ok' in (raw as any)
+            ? (raw as any).ok
+              ? (raw as any).data
+              : null
+            : (raw as any)
+        if (!imageUrl || typeof imageUrl !== 'string') return
+        if (!isCanvasReadyRef.current) return
+
+        const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
+
+        const scaleX = CANVAS_WIDTH / img.width!
+        const scaleY = CANVAS_HEIGHT / img.height!
+        const scale = Math.max(scaleX, scaleY)
+
+        img.set({
+          left: CANVAS_WIDTH / 2,
+          top: CANVAS_HEIGHT / 2,
+          originX: 'center',
+          originY: 'center',
+          scaleX: scale,
+          scaleY: scale
+        })
+
+        frameImageRef.current = img
+        canvas.backgroundImage = img
+        canvas.requestRenderAll()
+      } catch (err) {
+        console.error('Ошибка загрузки кадра:', err)
+      }
+    }
+
+    void loadFrame()
+  }, [filePath])
+
+  // Hydration Effect
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas) return
     let isActive = true
 
-    const canUseCanvas = (): boolean => {
-      const liveCanvas = fabricRef.current === canvas
-      // В v6/v7 проверка на lowerCanvasEl надежнее
-      return liveCanvas && !!canvas.getElement()
-    }
-
     const finalizeHydration = (): void => {
-      if (!canUseCanvas() || !isActive) return
-      console.log('Hydration finished, syncing objects...')
-      syncOverlayObjects()
+      if (!isActive || !isCanvasReadyRef.current) return
+
+      console.log('Hydration finished/fallback, syncing objects...')
+      try {
+        syncOverlayObjects()
+      } catch (e) {
+        console.error('Error in syncOverlayObjects:', e)
+      }
       ensureFrameImage()
       canvas.requestRenderAll()
     }
 
-    // Проверка на смену файла/стейта
     const lastHydration = lastHydrationRef.current
     const initialStateRef = initialState ?? null
     if (lastHydration.filePath !== filePath || lastHydration.initialState !== initialStateRef) {
@@ -907,16 +929,18 @@ export const EditorCanvas = ({
         console.warn('Clone error:', error)
       }
 
-      // Fabric v6+ loadFromJSON возвращает Promise.
-      // Используем .then(), чтобы гарантировать выполнение ПОСЛЕ загрузки.
       canvas
         .loadFromJSON(hydratedState)
         .then(() => {
           finalizeHydration()
         })
         .catch((err) => {
+          // Игнорируем ошибку clearRect, если канва уже уничтожена (гонка React Strict Mode)
+          const isClearRectError =
+            String(err).includes('clearRect') || String(err).includes('undefined')
+          if (!isCanvasReadyRef.current && isClearRectError) return
+
           console.error('Ошибка восстановления канвы:', err)
-          // Даже при ошибке пытаемся синхронизировать то, что есть
           finalizeHydration()
         })
 
@@ -925,18 +949,18 @@ export const EditorCanvas = ({
       }
     }
 
-    // Если нет initialState, просто инициализируем пустой редактор
     finalizeHydration()
-
     return () => {
       isActive = false
     }
   }, [filePath, initialState, syncOverlayObjects, ensureFrameImage])
 
+  // Apply settings trigger
   useEffect(() => {
     applyOverlaySettings()
   }, [applyOverlaySettings, overlaySettings])
 
+  // Events setup
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas) return
@@ -956,7 +980,6 @@ export const EditorCanvas = ({
         clampTextToBackground(block.background, block.text)
         attachTextToBackground(block.background, block.text)
       }
-
       canvas.requestRenderAll()
     }
 
@@ -1030,7 +1053,6 @@ export const EditorCanvas = ({
             text: { ...prev.text, fontSize: nextFontSize }
           }))
         }
-
         clampTextToBackground(block.background, block.text)
         attachTextToBackground(block.background, block.text)
       }
@@ -1086,7 +1108,6 @@ export const EditorCanvas = ({
           syncingFromCanvasRef.current = true
           setOverlaySettings(deriveOverlaySettingsFromBlock(block))
           setTextValue(block.text.text ?? '')
-          // allow the next user-driven change to propagate back to canvas
           setTimeout(() => {
             syncingFromCanvasRef.current = false
           }, 0)
@@ -1121,9 +1142,12 @@ export const EditorCanvas = ({
     attachTextToBackground,
     clampTextToBackground,
     deriveOverlaySettingsFromBlock,
+    getBlockId,
+    getOverlayBlock,
     syncTextWithBackground,
     updateLinkOffsets,
-    updateTextValueFromCanvas
+    updateTextValueFromCanvas,
+    getActiveBlockId // Added missing dependency
   ])
 
   const alignTextInsideBackground = (horizontal: 'left' | 'center' | 'right'): void => {
@@ -1143,8 +1167,6 @@ export const EditorCanvas = ({
     const rect = getObjectBoundingRect(background)
     const backgroundCenter = background.getCenterPoint()
 
-    // Keep the text anchored via link offsets. Don't switch originX to left/right,
-    // otherwise subsequent syncTextWithBackground will pull it back to center.
     const padding = 16
     const textW = text.getScaledWidth()
     const currentCenter = text.getCenterPoint()
@@ -1266,18 +1288,23 @@ export const EditorCanvas = ({
     const canvas = fabricRef.current
     if (!canvas) return
 
-    const bg = canvas.backgroundImage ?? undefined
+    const bg = canvas.backgroundImage
     try {
       canvas.backgroundImage = undefined
-      canvas.requestRenderAll()
-
       const exportScale = 1080 / CANVAS_WIDTH
       const overlayDataUrl = canvas.toDataURL({ format: 'png', multiplier: exportScale })
+
       const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data']))
 
       const textData = canvas
         .getObjects()
-        .filter((obj) => obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')
+        // Исправление 1: instanceof
+        .filter(
+          (obj) =>
+            obj instanceof fabric.IText ||
+            obj instanceof fabric.Textbox ||
+            obj instanceof fabric.Text
+        )
         .map((obj) => (obj as OverlayText).text ?? '')
         .join(' ')
         .trim()
@@ -1286,13 +1313,16 @@ export const EditorCanvas = ({
         canvasState,
         overlayDataUrl,
         textData,
-        overlaySettings: mergeOverlaySettings(overlaySettings), // <- сохраняем “полные” настройки
+        overlaySettings: mergeOverlaySettings(overlaySettings),
         profileSettings
       })
+    } catch (e) {
+      console.error('Save failed:', e)
     } finally {
-      canvas.backgroundImage = bg
-      ensureFrameImage()
-      canvas.requestRenderAll()
+      if (bg) {
+        canvas.backgroundImage = bg
+        canvas.requestRenderAll()
+      }
     }
   }
 
