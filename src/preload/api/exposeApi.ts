@@ -24,11 +24,15 @@ const api: Api = {
   extractFrame: async (
     path: string,
     strategyId?: StrategyType,
-    atSeconds?: number
+    atSeconds?: number,
+    profileSettings?: import('@shared/types').StrategyProfileSettings
   ): Promise<Result<ExtractFrameResult>> => {
-    return ipcRenderer.invoke(IPC.ExtractFrame, { path, strategyId, atSeconds }) as Promise<
-      Result<ExtractFrameResult>
-    >
+    return ipcRenderer.invoke(IPC.ExtractFrame, {
+      path,
+      strategyId,
+      atSeconds,
+      profileSettings
+    }) as Promise<Result<ExtractFrameResult>>
   },
   saveOverlay: (dataUrl: string): Promise<Result<SaveOverlayResult>> =>
     ipcRenderer.invoke(IPC.SaveOverlay, { dataUrl }) as Promise<Result<SaveOverlayResult>>,

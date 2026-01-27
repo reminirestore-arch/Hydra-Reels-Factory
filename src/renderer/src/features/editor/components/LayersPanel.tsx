@@ -5,6 +5,7 @@ import {
   OverlayBlock
 } from '@features/editor/utils/fabricHelpers'
 import * as fabric from 'fabric'
+import { JSX } from 'react'
 
 interface LayersPanelProps {
   elements: CanvasElementNode[]

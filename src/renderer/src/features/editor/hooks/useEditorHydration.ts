@@ -8,24 +8,12 @@ import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT
 } from '@features/editor/utils/fabricHelpers'
-import { OverlaySettings, StrategyProfileSettings } from '@shared/types'
+import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 import type { OverlaySavePayload } from '@features/editor/types'
+import { apiClient } from '@api/apiClient'
 
 // Локальный тип для ref
 type MutableRef<T> = { current: T }
-
-type FrameResponse = { ok: boolean; data?: unknown }
-
-const isFrameResponse = (value: unknown): value is FrameResponse =>
-  typeof value === 'object' && value !== null && 'ok' in value
-
-const extractImageUrl = (raw: unknown): string | null => {
-  if (isFrameResponse(raw)) {
-    if (!raw.ok) return null
-    return typeof raw.data === 'string' ? raw.data : null
-  }
-  return typeof raw === 'string' ? raw : null
-}
 
 const getFabricImageSource = (image?: fabric.FabricImage | null): string | undefined =>
   image?.getSrc?.() ?? (image as unknown as { src?: string } | null)?.src
@@ -35,6 +23,7 @@ interface UseEditorHydrationProps {
   isCanvasReadyRef: MutableRef<boolean>
   canvasInstance: fabric.Canvas | null
   filePath: string
+  strategyId: StrategyType
   initialState?: object
   syncOverlayObjects: () => void
   ensureFrameImage: (imageUrl?: string) => void
@@ -49,6 +38,7 @@ export const useEditorHydration = ({
   isCanvasReadyRef,
   canvasInstance,
   filePath,
+  strategyId,
   initialState,
   syncOverlayObjects,
   ensureFrameImage,
@@ -62,100 +52,141 @@ export const useEditorHydration = ({
     filePath,
     initialState: initialState ?? null
   })
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Load Frame
+  // Helper function to load frame with strategy
+  const loadFrameWithStrategy = async (
+    path: string,
+    strategy: StrategyType,
+    canvas: fabric.Canvas,
+    isActiveRef: { current: boolean },
+    currentProfileSettings?: StrategyProfileSettings
+  ): Promise<void> => {
+    try {
+      console.log('[Frontend] Requesting frame for:', path, 'with strategy:', strategy, 'profileSettings:', currentProfileSettings)
+      let imageUrl = await apiClient.extractFrame(path, strategy, undefined, currentProfileSettings)
+      if (!isActiveRef.current) return
+
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        console.warn('[Frontend] Invalid image URL from extractFrame', imageUrl)
+        return
+      }
+
+      if (
+        !imageUrl.startsWith('data:') &&
+        !imageUrl.startsWith('http') &&
+        !imageUrl.startsWith('file://')
+      ) {
+        if (imageUrl.includes(':\\')) {
+          imageUrl = 'file:///' + imageUrl.replace(/\\/g, '/')
+        } else {
+          imageUrl = 'file://' + imageUrl
+        }
+      }
+
+      console.log('[Frontend] Frame data received. Length:', imageUrl.length)
+
+      const existingFrame = frameImageRef.current
+      const existingSrc = getFabricImageSource(existingFrame)
+
+      if (existingFrame && existingSrc === imageUrl) {
+        ensureFrameImage(imageUrl)
+        canvas.requestRenderAll()
+        return
+      }
+
+      const imgEl = await fabric.util.loadImage(imageUrl, { crossOrigin: 'anonymous' })
+      if (!isActiveRef.current) return
+
+      if (!imgEl || !(imgEl instanceof HTMLImageElement)) {
+        console.error('[Frontend] Failed to load HTMLImageElement for frame', imgEl)
+        return
+      }
+
+      const img = new fabric.FabricImage(imgEl)
+      if (!img.width || !img.height) {
+        console.error('[Frontend] Failed to init FabricImage or dim is 0', img)
+        return
+      }
+
+      console.log(`[Frontend] Image loaded: ${img.width}x${img.height}`)
+
+      const scaleX = CANVAS_WIDTH / img.width
+      const scaleY = CANVAS_HEIGHT / img.height
+      const scale = Math.max(scaleX, scaleY)
+
+      img.set({
+        left: CANVAS_WIDTH / 2,
+        top: CANVAS_HEIGHT / 2,
+        originX: 'center',
+        originY: 'center',
+        scaleX: scale,
+        scaleY: scale,
+        selectable: false,
+        evented: false,
+        objectCaching: false,
+        excludeFromExport: true
+      })
+
+      frameImageRef.current = img
+      canvas.backgroundVpt = false
+      canvas.backgroundImage = img
+      ensureFrameImage(imageUrl)
+      canvas.requestRenderAll()
+
+      console.log('[Frontend] Background image set successfully')
+    } catch (err) {
+      console.error('[Frontend] Error loading frame:', err)
+    }
+  }
+
+  // Load Frame on mount or when filePath/strategyId changes
   useEffect(() => {
     if (!canvasInstance || !filePath) return
     const canvas = canvasInstance
-    let isActive = true
+    const isActiveRef = { current: true }
 
-    const loadFrame = async (): Promise<void> => {
-      try {
-        console.log('[Frontend] Requesting frame for:', filePath)
-        const raw = await window.api.extractFrame(filePath)
-        if (!isActive) return
-
-        let imageUrl = extractImageUrl(raw)
-
-        if (!imageUrl || typeof imageUrl !== 'string') {
-          console.warn('[Frontend] Invalid image URL from extractFrame', raw)
-          return
-        }
-
-        if (
-          !imageUrl.startsWith('data:') &&
-          !imageUrl.startsWith('http') &&
-          !imageUrl.startsWith('file://')
-        ) {
-          if (imageUrl.includes(':\\')) {
-            imageUrl = 'file:///' + imageUrl.replace(/\\/g, '/')
-          } else {
-            imageUrl = 'file://' + imageUrl
-          }
-        }
-
-        console.log('[Frontend] Frame data received. Length:', imageUrl.length)
-
-        const existingFrame = frameImageRef.current
-        const existingSrc = getFabricImageSource(existingFrame)
-
-        if (existingFrame && existingSrc === imageUrl) {
-          ensureFrameImage(imageUrl)
-          canvas.requestRenderAll()
-          return
-        }
-
-        const imgEl = await fabric.util.loadImage(imageUrl, { crossOrigin: 'anonymous' })
-        if (!isActive) return
-
-        if (!imgEl || !(imgEl instanceof HTMLImageElement)) {
-          console.error('[Frontend] Failed to load HTMLImageElement for frame', imgEl)
-          return
-        }
-
-        const img = new fabric.FabricImage(imgEl)
-        if (!img.width || !img.height) {
-          console.error('[Frontend] Failed to init FabricImage or dim is 0', img)
-          return
-        }
-
-        console.log(`[Frontend] Image loaded: ${img.width}x${img.height}`)
-
-        const scaleX = CANVAS_WIDTH / img.width
-        const scaleY = CANVAS_HEIGHT / img.height
-        const scale = Math.max(scaleX, scaleY)
-
-        img.set({
-          left: CANVAS_WIDTH / 2,
-          top: CANVAS_HEIGHT / 2,
-          originX: 'center',
-          originY: 'center',
-          scaleX: scale,
-          scaleY: scale,
-          selectable: false,
-          evented: false,
-          objectCaching: false,
-          excludeFromExport: true
-        })
-
-        frameImageRef.current = img
-        canvas.backgroundVpt = false
-        canvas.backgroundImage = img
-        ensureFrameImage(imageUrl)
-        canvas.requestRenderAll()
-
-        console.log('[Frontend] Background image set successfully')
-      } catch (err) {
-        console.error('[Frontend] Error loading frame:', err)
-      }
-    }
-
-    void loadFrame()
+    void loadFrameWithStrategy(filePath, strategyId, canvas, isActiveRef, profileSettings)
 
     return () => {
-      isActive = false
+      isActiveRef.current = false
     }
-  }, [filePath, canvasInstance, ensureFrameImage, frameImageRef])
+  }, [filePath, strategyId, canvasInstance, ensureFrameImage, frameImageRef, profileSettings])
+
+  // Update frame when profile settings change (with debounce)
+  useEffect(() => {
+    if (!canvasInstance || !filePath || !isCanvasReadyRef.current) return
+
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    // Debounce frame update to avoid too many requests
+    debounceTimerRef.current = setTimeout(() => {
+      const canvas = canvasInstance
+      const isActiveRef = { current: true }
+
+      const updateFrame = async (): Promise<void> => {
+        try {
+          console.log('[Frontend] Updating frame with new profile settings:', profileSettings)
+          await loadFrameWithStrategy(filePath, strategyId, canvas, isActiveRef, profileSettings)
+        } catch (err) {
+          if (isActiveRef.current) {
+            console.error('[Frontend] Error updating frame:', err)
+          }
+        }
+      }
+
+      void updateFrame()
+    }, 300) // 300ms debounce
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [profileSettings, filePath, strategyId, canvasInstance, isCanvasReadyRef, ensureFrameImage, frameImageRef])
 
   // Hydrate JSON
   useEffect(() => {

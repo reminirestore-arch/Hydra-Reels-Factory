@@ -1,4 +1,5 @@
-import type { StrategyType } from '@shared/types'
+import type { StrategyType, StrategyProfileSettings } from '@shared/types'
+import { createDefaultProfileSettings } from '@shared/domain/strategy'
 
 const normalize = 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
 
@@ -7,29 +8,64 @@ function clampFadeStart(duration: number, fadeDur: number): number {
   return start > 0 ? start : 0
 }
 
-export function buildStrategyFilter(strategyId: StrategyType, durationSeconds?: number): string {
+export function buildStrategyFilter(
+  strategyId: StrategyType,
+  durationSeconds?: number,
+  profileSettings?: StrategyProfileSettings
+): string {
   const dur = typeof durationSeconds === 'number' && durationSeconds > 0 ? durationSeconds : 0
+  const settings = profileSettings ?? createDefaultProfileSettings()
 
   switch (strategyId) {
-    case 'IG1':
-      return `crop=iw*0.98:ih*0.98,${normalize},vignette=PI/8`
-    case 'IG2':
-      return `setpts=0.99*PTS,${normalize},eq=saturation=1.2`
+    case 'IG1': {
+      // Calculate crop based on focusStrength (0.96 to 1.0)
+      const cropFactor = 0.96 + settings.focusStrength * 0.04
+      // Vignette intensity (0 to PI/8)
+      const vignetteAngle = (Math.PI / 8) * settings.vignetteIntensity
+      // Contrast
+      const contrastValue = settings.contrast
+      
+      return `crop=iw*${cropFactor}:ih*${cropFactor},${normalize},vignette=${vignetteAngle},eq=contrast=${contrastValue}`
+    }
+    case 'IG2': {
+      // Motion speed (inverse for setpts: 0.8 speed = 1/0.8 = 1.25 PTS multiplier)
+      const ptsMultiplier = 1 / settings.motionSpeed
+      // Saturation
+      const saturationValue = settings.saturation
+      // Contrast
+      const contrastValue = settings.contrast
+      
+      return `setpts=${ptsMultiplier}*PTS,${normalize},eq=saturation=${saturationValue}:contrast=${contrastValue}`
+    }
     case 'IG3': {
-      const fadeDur = 0.3
-      const outStart = dur ? clampFadeStart(dur, fadeDur) : 0
+      const fadeInDur = settings.fadeInDuration
+      const fadeOutDur = settings.fadeOutDuration
+      const outStart = dur ? clampFadeStart(dur, fadeOutDur) : 0
       const fades = dur
-        ? `,fade=t=in:st=0:d=${fadeDur},fade=t=out:st=${outStart}:d=${fadeDur}`
-        : `,fade=t=in:st=0:d=${fadeDur}`
-      return `unsharp=5:5:0.5:5:5:0.0,${normalize},eq=contrast=1.1${fades}`
+        ? `,fade=t=in:st=0:d=${fadeInDur},fade=t=out:st=${outStart}:d=${fadeOutDur}`
+        : `,fade=t=in:st=0:d=${fadeInDur}`
+      
+      // Sharpness (0 to 2.0, mapped to unsharp amount)
+      const sharpnessAmount = settings.sharpness
+      // Contrast
+      const contrastValue = settings.contrast
+      
+      return `unsharp=5:5:${sharpnessAmount}:5:5:0.0,${normalize},eq=contrast=${contrastValue}${fades}`
     }
     case 'IG4': {
-      const fadeDur = 0.5
-      const outStart = dur ? clampFadeStart(dur, fadeDur) : 0
+      const fadeInDur = settings.fadeInDuration
+      const fadeOutDur = settings.fadeOutDuration
+      const outStart = dur ? clampFadeStart(dur, fadeOutDur) : 0
       const fades = dur
-        ? `,fade=t=in:st=0:d=${fadeDur},fade=t=out:st=${outStart}:d=${fadeDur}`
-        : `,fade=t=in:st=0:d=${fadeDur}`
-      return `rotate=0.3*PI/180,scale=1085:1930,crop=1080:1920,noise=c0s=7:allf=t,setsar=1${fades}`
+        ? `,fade=t=in:st=0:d=${fadeInDur},fade=t=out:st=${outStart}:d=${fadeOutDur}`
+        : `,fade=t=in:st=0:d=${fadeInDur}`
+      
+      // Rotation angle in radians
+      const rotationRad = (settings.rotationAngle * Math.PI) / 180
+      // Grain intensity (0 to 7)
+      const grainIntensity = settings.grain * 7
+      
+      return `rotate=${rotationRad},scale=1085:1930,crop=1080:1920,noise=c0s=${grainIntensity}:allf=t,setsar=1${fades}`
     }
     default:
       return normalize

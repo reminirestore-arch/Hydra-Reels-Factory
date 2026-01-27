@@ -3,6 +3,17 @@ import { apiClient } from '@api/apiClient'
 import { useFilesStore } from '@features/files/model/filesStore'
 import type { StrategyType } from '@shared/types'
 import type { FfmpegLogEvent } from '@shared/ipc/contracts'
+import { getRendererConfig } from '@shared/config/renderer'
+import { retry } from '@shared/utils/retry'
+
+const config = getRendererConfig()
+
+// Dynamic import for p-limit (ESM only)
+// p-limit v7 is ESM-only, use dynamic import
+const getPLimit = async (): Promise<typeof import('p-limit').default> => {
+  const { default: pLimit } = await import('p-limit')
+  return pLimit
+}
 
 type Progress = { completed: number; total: number }
 
@@ -46,7 +57,7 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
   statusByFileId: {},
 
   logs: [],
-  maxLogs: 600,
+  maxLogs: 600, // Default, can be configured via IPC if needed
 
   actions: {
     reset: () =>
@@ -105,41 +116,78 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
       let completed = 0
 
       try {
+        // Initialize p-limit for parallel processing
+        const pLimit = await getPLimit()
+        const limit = pLimit(config.ffmpeg.maxConcurrent)
+
+        // Track completed strategies per file
+        const fileProgress = new Map<string, number>()
+
+        // Create all render tasks
+        const tasks: Array<() => Promise<void>> = []
+
         for (const file of files) {
-          if (get().stopRequested) break
-
-          get().actions.setFileStatus(file.id, 'processing')
-
           const strategies = Object.values(file.strategies)
+          fileProgress.set(file.id, 0)
 
-          try {
-            for (const strategy of strategies) {
-              if (get().stopRequested) break
+          for (const strategy of strategies) {
+            tasks.push(async () => {
+              if (get().stopRequested) return
 
-              const ok = await apiClient.renderStrategy({
-                inputPath: file.fullPath,
-                outputDir,
-                outputName: getOutputName(file.filename, strategy.id),
-                overlayPath: strategy.overlayPath,
-                overlayStart: strategy.overlaySettings.timing.startTime,
-                overlayDuration: strategy.overlaySettings.timing.duration,
-                strategyId: strategy.id,
-                fileId: file.id,
-                filename: file.filename
-              })
+              // Set file status to processing when starting first strategy
+              const currentStatus = get().statusByFileId[file.id]
+              if (currentStatus !== 'processing' && currentStatus !== 'done') {
+                get().actions.setFileStatus(file.id, 'processing')
+              }
 
-              if (!ok) throw new Error('Render failed')
+              try {
+                const ok = await retry(
+                  () =>
+                    apiClient.renderStrategy({
+                      inputPath: file.fullPath,
+                      outputDir,
+                      outputName: getOutputName(file.filename, strategy.id),
+                      overlayPath: strategy.overlayPath,
+                      overlayStart: strategy.overlaySettings.timing.startTime,
+                      overlayDuration: strategy.overlaySettings.timing.duration,
+                      overlayFadeOutDuration: strategy.overlaySettings.timing.fadeOutDuration,
+                      strategyId: strategy.id,
+                      profileSettings: strategy.profileSettings,
+                      fileId: file.id,
+                      filename: file.filename
+                    }),
+                  {
+                    maxAttempts: config.processing.retryAttempts
+                  }
+                )
 
-              completed += 1
-              set({ progress: { completed, total } })
-            }
+                if (!ok) throw new Error('Render failed')
 
-            get().actions.setFileStatus(file.id, get().stopRequested ? 'idle' : 'done')
-          } catch (e) {
-            console.error('Render file failed:', file.filename, e)
-            get().actions.setFileStatus(file.id, 'error')
+                completed += 1
+                set({ progress: { completed, total } })
+
+                // Update file progress
+                const currentFileProgress = (fileProgress.get(file.id) ?? 0) + 1
+                fileProgress.set(file.id, currentFileProgress)
+
+                // Check if all strategies for this file are done
+                const strategiesCount = strategies.length
+                if (currentFileProgress >= strategiesCount) {
+                  get().actions.setFileStatus(file.id, get().stopRequested ? 'idle' : 'done')
+                }
+              } catch (e) {
+                console.error('Render strategy failed:', file.filename, strategy.id, e)
+                get().actions.setFileStatus(file.id, 'error')
+                // Still increment progress to avoid blocking
+                completed += 1
+                set({ progress: { completed, total } })
+              }
+            })
           }
         }
+
+        // Execute all tasks in parallel (limited by maxConcurrent)
+        await Promise.all(tasks.map((task) => limit(task)))
 
         set({ isRendering: false, lastResult: !get().stopRequested })
       } catch (e) {

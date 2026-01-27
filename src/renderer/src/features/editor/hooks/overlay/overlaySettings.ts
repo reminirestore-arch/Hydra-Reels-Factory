@@ -17,9 +17,11 @@ export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): bo
   return (
     a.timing.startTime === b.timing.startTime &&
     a.timing.duration === b.timing.duration &&
+    (a.timing.fadeOutDuration ?? 0) === (b.timing.fadeOutDuration ?? 0) &&
     a.text.align === b.text.align &&
     a.text.color === b.text.color &&
     a.text.fontSize === b.text.fontSize &&
+    a.text.fontWeight === b.text.fontWeight &&
     a.background.color === b.background.color &&
     a.background.opacity === b.background.opacity &&
     a.background.width === b.background.width &&
@@ -34,13 +36,17 @@ export const deriveOverlaySettingsFromBlock = (
 ): OverlaySettings => {
   const defaults = buildDefaultOverlaySettings()
   const { background, text } = block
+
   return mergeOverlaySettings({
-    timing: overlaySettingsRef.current.timing,
+    timing: {
+      ...overlaySettingsRef.current.timing
+    },
     text: {
       ...overlaySettingsRef.current.text,
       fontSize: text.fontSize ?? defaults.text.fontSize,
       color: (text.fill as string) ?? defaults.text.color,
-      align: normalizeTextAlign(text.textAlign, defaults.text.align)
+      align: normalizeTextAlign(text.textAlign, defaults.text.align),
+      fontWeight: text.fontWeight ?? defaults.text.fontWeight
     },
     background: {
       ...overlaySettingsRef.current.background,

@@ -2,6 +2,7 @@
 // Workaround for HeroUI components that don't accept children prop in TypeScript definitions
 import { Button } from '@heroui/react'
 import { MonitorPlay, Save, Type, X } from 'lucide-react'
+import { JSX } from 'react'
 
 interface EditorToolbarProps {
   onAddText: () => void

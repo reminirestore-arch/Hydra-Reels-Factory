@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState, type RefObject, type MutableRefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as fabric from 'fabric'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@features/editor/utils/fabricHelpers'
 
+// Локальный тип для ref (совпадает с типами в других хуках)
+type MutableRef<T> = { current: T }
+
 export const useFabricCanvas = (): {
-  hostRef: RefObject<HTMLDivElement>
-  fabricRef: MutableRefObject<fabric.Canvas | null>
-  isCanvasReadyRef: MutableRefObject<boolean>
+  hostRef: RefObject<HTMLDivElement | null>
+  fabricRef: MutableRef<fabric.Canvas | null>
+  isCanvasReadyRef: MutableRef<boolean>
   canvasInstance: fabric.Canvas | null
 } => {
-  const hostRef = useRef<HTMLDivElement>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
   const fabricRef = useRef<fabric.Canvas | null>(null)
   const isCanvasReadyRef = useRef(false)
   // Добавляем стейт, чтобы оповестить остальные хуки о готовности
@@ -22,11 +25,32 @@ export const useFabricCanvas = (): {
     host.replaceChildren()
 
     const el = document.createElement('canvas')
+    // Логические размеры остаются фиксированными для fabric.js
     el.width = CANVAS_WIDTH
     el.height = CANVAS_HEIGHT
-    el.style.width = `${CANVAS_WIDTH}px`
-    el.style.height = `${CANVAS_HEIGHT}px`
     host.appendChild(el)
+    
+    // Функция для обновления размеров canvas
+    // Используем фиксированные логические размеры - fabric.js будет правильно вычислять координаты
+    const updateCanvasSize = (): void => {
+      if (!el || !host || !fabricRef.current) return
+      // Логические размеры остаются фиксированными (450x800)
+      // Визуальные размеры устанавливаем равными логическим
+      // Масштабирование происходит на уровне контейнера (CanvasContainer)
+      el.style.width = `${CANVAS_WIDTH}px`
+      el.style.height = `${CANVAS_HEIGHT}px`
+      
+      // Обновляем размеры wrapper равными логическим размерам
+      if (fabricRef.current.wrapperEl) {
+        const wrapper = fabricRef.current.wrapperEl
+        wrapper.style.width = `${CANVAS_WIDTH}px`
+        wrapper.style.height = `${CANVAS_HEIGHT}px`
+        wrapper.style.transform = 'none'
+      }
+      
+      // Пересчитываем offset для правильной работы координат
+      fabricRef.current.calcOffset()
+    }
 
     const canvas = new fabric.Canvas(el, {
       width: CANVAS_WIDTH,
@@ -38,7 +62,10 @@ export const useFabricCanvas = (): {
     })
 
     const wrapper = canvas.wrapperEl
-    if (wrapper) wrapper.style.touchAction = 'none'
+    if (wrapper) {
+      wrapper.style.touchAction = 'none'
+      wrapper.style.position = 'relative'
+    }
 
     fabricRef.current = canvas
     isCanvasReadyRef.current = true
@@ -52,13 +79,20 @@ export const useFabricCanvas = (): {
     const ro = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         if (!isCanvasReadyRef.current || !fabricRef.current) return
-        fabricRef.current.calcOffset()
+        updateCanvasSize()
+        // Обновляем координаты всех объектов после изменения размеров
+        fabricRef.current.getObjects().forEach((obj) => {
+          obj.setCoords()
+        })
         if (fabricRef.current.contextContainer) {
           fabricRef.current.requestRenderAll()
         }
       })
     })
     ro.observe(host)
+    
+    // Инициализируем размеры при создании
+    updateCanvasSize()
 
     requestAnimationFrame(() => {
       if (!isCanvasReadyRef.current || !fabricRef.current) return

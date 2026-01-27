@@ -29,8 +29,17 @@ export const apiClient = {
     unwrap(await (window.api.selectOutputFolder() as Promise<Result<string | null>>)),
   scanFolder: async (path: string) =>
     unwrap(await (window.api.scanFolder(path) as Promise<Result<ScanFolderResult>>)),
-  extractFrame: async (path: string, strategyId?: StrategyType, atSeconds?: number) =>
-    unwrap(await (window.api.extractFrame(path, strategyId, atSeconds) as Promise<Result<string>>)),
+  extractFrame: async (
+    path: string,
+    strategyId?: StrategyType,
+    atSeconds?: number,
+    profileSettings?: import('@shared/types').StrategyProfileSettings
+  ) =>
+    unwrap(
+      await (window.api.extractFrame(path, strategyId, atSeconds, profileSettings) as Promise<
+        Result<string>
+      >)
+    ),
   saveOverlay: async (dataUrl: string) =>
     unwrap(await (window.api.saveOverlay(dataUrl) as Promise<Result<string>>)),
   renderStrategy: async (payload: RenderStrategyPayload) =>
@@ -43,7 +52,12 @@ export const apiClient = {
   selectFolder: () => Promise<string | null>
   selectOutputFolder: () => Promise<string | null>
   scanFolder: (path: string) => Promise<ScanFolderResult>
-  extractFrame: (path: string, strategyId?: StrategyType, atSeconds?: number) => Promise<string>
+  extractFrame: (
+    path: string,
+    strategyId?: StrategyType,
+    atSeconds?: number,
+    profileSettings?: import('@shared/types').StrategyProfileSettings
+  ) => Promise<string>
   saveOverlay: (dataUrl: string) => Promise<string>
   renderStrategy: (payload: RenderStrategyPayload) => Promise<boolean>
   onFfmpegLog: (h: (e: FfmpegLogEvent) => void) => () => void
