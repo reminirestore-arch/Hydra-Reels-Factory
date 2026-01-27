@@ -99,7 +99,25 @@ class Logger {
 }
 
 // Create logger instances for different contexts
-const logLevel = (process.env.LOG_LEVEL as LogLevel) || 'info'
+// В renderer process process.env недоступен, используем проверку
+function getLogLevel(): LogLevel {
+  if (typeof process !== 'undefined' && process.env) {
+    return (process.env.LOG_LEVEL as LogLevel) || 'info'
+  }
+  // В renderer можно использовать window.__ENV__ если он доступен
+  if (typeof window !== 'undefined') {
+    const windowWithEnv = window as Window & { __ENV__?: Record<string, string | undefined> }
+    if (windowWithEnv.__ENV__?.LOG_LEVEL) {
+      const level = windowWithEnv.__ENV__.LOG_LEVEL as LogLevel
+      if (['error', 'warn', 'info', 'debug'].includes(level)) {
+        return level
+      }
+    }
+  }
+  return 'info'
+}
+
+const logLevel = getLogLevel()
 
 export const logger = new Logger(logLevel, 1000)
 
