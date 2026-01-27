@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { apiClient } from '@api/apiClient'
 import { useFilesStore } from '@features/files/model/filesStore'
-import type { StrategyType } from '@shared/types'
+import type { StrategyType, VideoStrategy } from '@shared/types'
 import type { FfmpegLogEvent } from '@shared/ipc/contracts'
 import { getRendererConfig } from '@shared/config/renderer'
 import { retry } from '@shared/utils/retry'
@@ -127,7 +127,7 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         const tasks: Array<() => Promise<void>> = []
 
         for (const file of files) {
-          const strategies = Object.values(file.strategies)
+          const strategies: VideoStrategy[] = Object.values(file.strategies)
           fileProgress.set(file.id, 0)
 
           for (const strategy of strategies) {
