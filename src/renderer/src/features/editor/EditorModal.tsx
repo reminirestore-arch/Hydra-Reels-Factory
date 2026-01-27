@@ -27,8 +27,8 @@ export const EditorModal = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative flex h-[90vh] w-[90vw] max-w-7xl flex-col overflow-hidden rounded-xl bg-gray-900 shadow-2xl ring-1 ring-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl bg-gray-900 shadow-2xl ring-1 ring-white/10">
         <EditorCanvas
           filePath={filePath}
           strategyId={strategyId}

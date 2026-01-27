@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import type { VideoFile } from '@shared/types'
-import { apiClient } from '../../../shared/api/apiClient'
+import { apiClient } from '@api/apiClient'
+import { VideoFileSchema, safeParse } from '@shared/validation/schemas'
+import { createLogger } from '@shared/logger'
+
+const logger = createLogger('FilesStore')
 
 type FilesState = {
   inputDir: string | null
@@ -57,12 +61,33 @@ export const useFilesStore = create<FilesState>((set, get) => ({
       try {
         const files = await apiClient.scanFolder(inputDir)
 
-        const prevSelectedId = get().selectedFile?.id ?? null
-        const nextSelected = files.find((f) => f.id === prevSelectedId) ?? files[0] ?? null
+        // Validate files with Zod
+        const validatedFiles: VideoFile[] = []
+        for (const file of files) {
+          const validation = safeParse(VideoFileSchema, file)
+          if (validation.success) {
+            validatedFiles.push(validation.data)
+          } else {
+            logger.warn('Invalid video file skipped', {
+              errors: validation.error.issues,
+              fileId: file.id
+            })
+          }
+        }
 
-        set({ files, selectedFile: nextSelected, isLoading: false })
+        const prevSelectedId = get().selectedFile?.id ?? null
+        const nextSelected =
+          validatedFiles.find((f) => f.id === prevSelectedId) ?? validatedFiles[0] ?? null
+
+        logger.info('Files scanned', {
+          count: validatedFiles.length,
+          skipped: files.length - validatedFiles.length
+        })
+        set({ files: validatedFiles, selectedFile: nextSelected, isLoading: false })
       } catch (e) {
-        set({ isLoading: false, error: String(e) })
+        const error = e instanceof Error ? e : new Error(String(e))
+        logger.error('Scan failed', error)
+        set({ isLoading: false, error: error.message })
       }
     },
 

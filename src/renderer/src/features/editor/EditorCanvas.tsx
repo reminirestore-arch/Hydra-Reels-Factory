@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import * as fabric from 'fabric'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
 import { createDefaultStrategy } from '@shared/defaults'
@@ -32,14 +32,19 @@ export const EditorCanvas = ({
   initialProfileSettings,
   onSave,
   onClose
-}: EditorCanvasProps) => {
-  // 1. Core State
-  const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(() =>
-    mergeOverlaySettings(initialOverlaySettings)
+}: EditorCanvasProps): React.JSX.Element => {
+  // 1. Core State (memoized initial values)
+  const initialOverlaySettingsMemo = useMemo(
+    () => mergeOverlaySettings(initialOverlaySettings),
+    [initialOverlaySettings]
   )
-  const [profileSettings, setProfileSettings] = useState<StrategyProfileSettings>(
-    initialProfileSettings ?? createDefaultStrategy(strategyId).profileSettings
+  const initialProfileSettingsMemo = useMemo(
+    () => initialProfileSettings ?? createDefaultStrategy(strategyId).profileSettings,
+    [initialProfileSettings, strategyId]
   )
+
+  const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(initialOverlaySettingsMemo)
+  const [profileSettings, setProfileSettings] = useState<StrategyProfileSettings>(initialProfileSettingsMemo)
 
   // 2. Init Canvas
   // Получаем canvasInstance
@@ -58,7 +63,20 @@ export const EditorCanvas = ({
   // 4. Update Setting Effect
   useEffect(() => {
     logic.applyOverlaySettings()
-  }, [logic.applyOverlaySettings, overlaySettings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logic, overlaySettings])
+
+  // Memoized callbacks
+  const handleSave = useCallback(
+    (payload: OverlaySavePayload) => {
+      onSave(payload)
+    },
+    [onSave]
+  )
+
+  const handleClose = useCallback(() => {
+    onClose()
+  }, [onClose])
 
   // 5. Init Hydration
   const hydration = useEditorHydration({
@@ -66,18 +84,19 @@ export const EditorCanvas = ({
     isCanvasReadyRef,
     canvasInstance, // Передаем инстанс
     filePath,
+    strategyId,
     initialState,
     syncOverlayObjects: logic.syncOverlayObjects,
     ensureFrameImage: logic.ensureFrameImage,
     frameImageRef: logic.frameImageRef,
     overlaySettings,
     profileSettings,
-    onSave
+    onSave: handleSave
   })
 
   return (
     <div className="flex flex-col h-full w-full bg-black/95">
-      <EditorToolbar onAddText={logic.addText} onSave={hydration.handleSave} onClose={onClose} />
+      <EditorToolbar onAddText={logic.addText} onSave={hydration.handleSave} onClose={handleClose} />
 
       <div className="flex flex-1 min-h-0">
         <LayersPanel
@@ -102,18 +121,24 @@ export const EditorCanvas = ({
           onAlignVertical={logic.alignTextVertically}
           onCenterText={logic.handleCenterText}
           onCenterBackground={logic.handleCenterBackground}
-          updateCanvasText={(val) => {
-            const block = logic.getOverlayBlock(logic.selectedBlockId)
-            if (block) {
-              block.text.set({ text: val })
-              if (fabricRef.current) {
-                fabricRef.current.fire('text:changed', {
-                  target: block.text as fabric.IText
-                })
+          updateCanvasText={useCallback(
+            (val: string) => {
+              const block = logic.getOverlayBlock(logic.selectedBlockId)
+              if (block) {
+                block.text.set({ text: val })
+                if (fabricRef.current) {
+                  fabricRef.current.fire('text:changed', {
+                    target: block.text as fabric.IText
+                  })
+                }
+                fabricRef.current?.requestRenderAll()
               }
-              fabricRef.current?.requestRenderAll()
-            }
-          }}
+            },
+            [logic]
+          )}
+          onTestFadeOut={useCallback(() => {
+            logic.animateFadeOutBlock()
+          }, [logic])}
         />
       </div>
     </div>

@@ -1,17 +1,31 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Workaround for HeroUI components that don't accept children prop in TypeScript definitions
 import type { JSX } from 'react'
-import { useState } from 'react'
+import { useState, lazy, Suspense, useMemo, useCallback } from 'react'
 import { Button, Card, ScrollShadow, Chip, Avatar } from '@heroui/react'
 import type { StrategyType, VideoFile } from '@shared/types'
-import { EditorPanel } from '../../features/editor/EditorPanel'
-import { EditorModal } from '../../features/editor/EditorModal'
-import { useFilesStore } from '../../features/files/model/filesStore'
-import { useProcessingStore } from '../../features/processing/model/processingStore'
-import { apiClient } from '../../shared/api/apiClient'
-import type { OverlaySavePayload } from '../../features/editor/types'
+import { EditorPanel } from '@features/editor/EditorPanel'
+import { useFilesStore } from '@features/files/model/filesStore'
+import { useProcessingStore } from '@features/processing/model/processingStore'
+import { apiClient } from '@api/apiClient'
+import type { OverlaySavePayload } from '@features/editor/types'
 
+// Lazy load EditorModal for code splitting
+const EditorModal = lazy(() =>
+  import('@features/editor/EditorModal').then((module) => ({ default: module.EditorModal }))
+)
+
+// Memoized helper function
 const getCustomCount = (file: VideoFile): number => {
   return Object.values(file.strategies).filter((strategy) => strategy.status === 'custom').length
 }
+
+// Loading fallback for lazy components
+const EditorModalLoader = (): JSX.Element => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="text-white">Loading editor...</div>
+  </div>
+)
 
 export function Dashboard(): JSX.Element {
   const { inputDir, outputDir, files, selectedFile, isLoading, error, actions } = useFilesStore()
@@ -27,17 +41,24 @@ export function Dashboard(): JSX.Element {
 
   const [activeStrategy, setActiveStrategy] = useState<StrategyType | null>(null)
 
-  const handleFileSelect = (file: VideoFile): void => {
-    if (isRendering) return
-    actions.selectFile(file)
-  }
+  const handleFileSelect = useCallback(
+    (file: VideoFile): void => {
+      if (isRendering) return
+      actions.selectFile(file)
+    },
+    [isRendering, actions]
+  )
 
-  const handleOpenEditor = (strategy: StrategyType): void => {
-    if (isRendering) return
-    setActiveStrategy(strategy)
-  }
+  const handleOpenEditor = useCallback(
+    (strategy: StrategyType): void => {
+      if (isRendering) return
+      setActiveStrategy(strategy)
+    },
+    [isRendering]
+  )
 
-  const handleSaveOverlay = async (payload: OverlaySavePayload): Promise<void> => {
+  const handleSaveOverlay = useCallback(
+    async (payload: OverlaySavePayload): Promise<void> => {
     if (!selectedFile || !activeStrategy) return
 
     // ИСПРАВЛЕНИЕ: saveOverlay возвращает строку (путь), а не объект с полем path
@@ -59,11 +80,14 @@ export function Dashboard(): JSX.Element {
       }
     }
 
-    actions.updateFile(next)
-    setActiveStrategy(null)
-  }
+      actions.updateFile(next)
+      setActiveStrategy(null)
+    },
+    [selectedFile, activeStrategy, actions]
+  )
 
-  const processingLabelByFileId = (fileId: string): string => {
+  const processingLabelByFileId = useCallback(
+    (fileId: string): string => {
     const status = statusByFileId[fileId] ?? 'idle'
 
     return status === 'done'
@@ -73,20 +97,32 @@ export function Dashboard(): JSX.Element {
         : status === 'error'
           ? 'Ошибка'
           : 'Не обработан'
-  }
+    },
+    [statusByFileId]
+  )
 
-  const handlePickInputDir = async (): Promise<void> => {
+  const handlePickInputDir = useCallback(async (): Promise<void> => {
     if (isRendering) return
 
     // сброс статусов ДО нового скана
-    processingActions.clearStatuses()
+      processingActions.clearStatuses()
 
-    await actions.pickInputDir()
-  }
+      await actions.pickInputDir()
+    },
+    [isRendering, processingActions, actions]
+  )
 
-  // Вспомогательная переменная для извлечения данных текущей стратегии
-  const activeStrategyData =
-    selectedFile && activeStrategy ? selectedFile.strategies?.[activeStrategy] : null
+  // Memoized strategy data
+  const activeStrategyData = useMemo(
+    () => (selectedFile && activeStrategy ? selectedFile.strategies?.[activeStrategy] : null),
+    [selectedFile, activeStrategy]
+  )
+
+  // Memoized custom count for files
+  const filesWithCustomCount = useMemo(
+    () => files.map(file => ({ file, customCount: getCustomCount(file) })),
+    [files]
+  )
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden font-sans text-foreground">
@@ -98,7 +134,13 @@ export function Dashboard(): JSX.Element {
             className="font-bold cursor-pointer"
             variant="outline"
             isDisabled={isRendering || isLoading}
-            {...({ children: isLoading ? 'Сканирование...' : inputDir ? 'Изменить входную папку' : 'Выбрать входную папку' } as any)}
+            {...({
+              children: isLoading
+                ? 'Сканирование...'
+                : inputDir
+                  ? 'Изменить входную папку'
+                  : 'Выбрать входную папку'
+            } as any)}
           />
 
           <Button
@@ -124,8 +166,7 @@ export function Dashboard(): JSX.Element {
         <ScrollShadow
           className={`flex-1 p-4 space-y-3 ${isRendering ? 'opacity-60 pointer-events-none' : ''}`}
         >
-          {files.map((file) => {
-            const customCount = getCustomCount(file)
+          {filesWithCustomCount.map(({ file, customCount }) => {
             const processingLabel = processingLabelByFileId(file.id)
             const status = statusByFileId[file.id] ?? 'idle'
 
@@ -133,9 +174,7 @@ export function Dashboard(): JSX.Element {
               <Card
                 key={file.id}
                 className={`w-full border border-white/5 bg-default-100/5 transition-all cursor-pointer hover:bg-white/5 active:scale-95 ${
-                  selectedFile?.id === file.id
-                    ? 'border-primary/50 bg-primary/10'
-                    : ''
+                  selectedFile?.id === file.id ? 'border-primary/50 bg-primary/10' : ''
                 }`}
               >
                 <div
@@ -156,9 +195,7 @@ export function Dashboard(): JSX.Element {
                   </Avatar>
 
                   <div className="flex-1 min-w-0 text-left">
-                    <div className="text-sm font-bold truncate text-white">
-                      {file.filename}
-                    </div>
+                    <div className="text-sm font-bold truncate text-white">{file.filename}</div>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Chip size="sm" className="h-5 text-[10px]">
                         КАСТОМ {customCount}/4
@@ -196,7 +233,9 @@ export function Dashboard(): JSX.Element {
               onPress={
                 isRendering ? () => processingActions.stop() : () => processingActions.renderAll()
               }
-              {...({ children: isRendering ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ' } as any)}
+              {...({
+                children: isRendering ? 'ОСТАНОВИТЬ ОБРАБОТКУ' : 'ЗАПУСТИТЬ ОБРАБОТКУ'
+              } as any)}
             />
 
             {isRendering && (
@@ -214,7 +253,12 @@ export function Dashboard(): JSX.Element {
           <div className="p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs text-default-500">FFmpeg logs</div>
-              <Button size="sm" variant="light" onPress={() => processingActions.clearLogs()} {...({ children: 'Очистить' } as any)} />
+              <Button
+                size="sm"
+                variant="light"
+                onPress={() => processingActions.clearLogs()}
+                {...({ children: 'Очистить' } as any)}
+              />
             </div>
 
             <ScrollShadow className="max-h-56 text-[11px] font-mono whitespace-pre-wrap">
@@ -247,16 +291,18 @@ export function Dashboard(): JSX.Element {
       </div>
 
       {selectedFile && activeStrategy && (
-        <EditorModal
-          isOpen={true}
-          filePath={selectedFile.fullPath}
-          strategyId={activeStrategy}
-          initialState={activeStrategyData?.canvasState}
-          initialOverlaySettings={activeStrategyData?.overlaySettings}
-          initialProfileSettings={activeStrategyData?.profileSettings}
-          onClose={() => setActiveStrategy(null)}
-          onSave={handleSaveOverlay}
-        />
+        <Suspense fallback={<EditorModalLoader />}>
+          <EditorModal
+            isOpen={true}
+            filePath={selectedFile.fullPath}
+            strategyId={activeStrategy}
+            initialState={activeStrategyData?.canvasState}
+            initialOverlaySettings={activeStrategyData?.overlaySettings}
+            initialProfileSettings={activeStrategyData?.profileSettings}
+            onClose={() => setActiveStrategy(null)}
+            onSave={handleSaveOverlay}
+          />
+        </Suspense>
       )}
     </div>
   )

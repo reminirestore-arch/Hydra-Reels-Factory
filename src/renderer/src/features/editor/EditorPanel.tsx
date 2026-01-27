@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Workaround for HeroUI components that don't accept children prop in TypeScript definitions
 import { JSX } from 'react'
 import { Button, Card, Chip, ScrollShadow } from '@heroui/react'
 import { VideoFile, StrategyType } from '@shared/types'
@@ -40,7 +42,11 @@ export const EditorPanel = ({
               </Chip>
             </div>
           </div>
-          <Button isIconOnly size="sm" {...({ children: <Play size={16} fill="currentColor" /> } as any)} />
+          <Button
+            isIconOnly
+            size="sm"
+            {...({ children: <Play size={16} fill="currentColor" /> } as any)}
+          />
         </div>
       </div>
 

@@ -10,23 +10,81 @@ import type {
   FfmpegLogEvent
 } from '@shared/ipc/contracts'
 import { ok, err, toUnknownErr } from './_result'
+import {
+  ExtractFrameArgsSchema,
+  RenderStrategyPayloadSchema,
+  safeParse
+} from '@shared/validation/schemas'
+import { pathValidator } from '@shared/security/pathValidation'
+import { createLogger } from '@shared/logger'
 
-import { extractFrameAsDataUrl, renderStrategyVideo } from '../../services/ffmpeg'
+const logger = createLogger('FFmpegHandler')
+
+import { extractFrameAsDataUrl, renderStrategyVideo } from '@services/ffmpeg'
 
 async function extractFrameImpl(args: ExtractFrameArgs): Promise<ExtractFrameResult> {
-  const { path: inputPath, strategyId, atSeconds } = args
-  console.log(`[IPC] extractFrameImpl called for: ${inputPath}`)
-  return extractFrameAsDataUrl(inputPath, 450, 800, strategyId, atSeconds ?? 0)
+  const { path: inputPath, strategyId, atSeconds, profileSettings } = args
+
+  // Validate and sanitize path
+  const pathValidation = pathValidator.validatePath(inputPath)
+  if (!pathValidation.valid) {
+    logger.error('Invalid path in extractFrame', undefined, {
+      path: inputPath,
+      error: pathValidation.error
+    })
+    throw new Error(pathValidation.error)
+  }
+
+  logger.info('Extracting frame', {
+    path: inputPath,
+    strategyId,
+    atSeconds,
+    hasProfileSettings: !!profileSettings
+  })
+  return extractFrameAsDataUrl(
+    pathValidation.sanitized!,
+    450,
+    800,
+    strategyId,
+    atSeconds ?? 0,
+    profileSettings
+  )
 }
 
 async function renderStrategyImpl(
   event: IpcMainInvokeEvent,
   payload: RenderStrategyPayload
 ): Promise<RenderStrategyResult> {
-  const outputName = payload.outputName.endsWith('.mp4')
-    ? payload.outputName
-    : `${payload.outputName}.mp4`
-  const outputPath = pathJoin(payload.outputDir, outputName)
+  // Validate and sanitize paths
+  const inputPathValidation = pathValidator.validatePath(payload.inputPath)
+  if (!inputPathValidation.valid) {
+    logger.error('Invalid input path', undefined, {
+      path: payload.inputPath,
+      error: inputPathValidation.error
+    })
+    throw new Error(inputPathValidation.error)
+  }
+
+  const outputDirValidation = pathValidator.validatePath(payload.outputDir)
+  if (!outputDirValidation.valid) {
+    logger.error('Invalid output directory', undefined, {
+      path: payload.outputDir,
+      error: outputDirValidation.error
+    })
+    throw new Error(outputDirValidation.error)
+  }
+
+  const sanitizedOutputName = pathValidator.sanitizeFilename(payload.outputName)
+  const outputName = sanitizedOutputName.endsWith('.mp4')
+    ? sanitizedOutputName
+    : `${sanitizedOutputName}.mp4`
+  const outputPath = pathJoin(outputDirValidation.sanitized!, outputName)
+
+  logger.info('Rendering strategy', {
+    inputPath: inputPathValidation.sanitized,
+    outputPath,
+    strategyId: payload.strategyId
+  })
 
   const sendLog = (level: FfmpegLogEvent['level'], line: string): void => {
     event.sender.send(IPC.FfmpegLog, {
@@ -41,18 +99,25 @@ async function renderStrategyImpl(
 
   try {
     await renderStrategyVideo({
-      inputPath: payload.inputPath,
+      inputPath: inputPathValidation.sanitized!,
       outputPath,
-      overlayPath: payload.overlayPath,
+      overlayPath: payload.overlayPath
+        ? pathValidator.validatePath(payload.overlayPath).sanitized
+        : undefined,
       overlayStart: payload.overlayStart,
       overlayDuration: payload.overlayDuration,
+      overlayFadeOutDuration: payload.overlayFadeOutDuration,
       strategyId: payload.strategyId,
+      profileSettings: payload.profileSettings,
       onLog: (line) => sendLog('stderr', line),
       onProgress: (p) => sendLog('progress', p)
     })
+    logger.info('Render completed successfully', { outputPath })
     return true
   } catch (e) {
-    sendLog('info', `Render failed: ${e instanceof Error ? e.message : String(e)}`)
+    const error = e instanceof Error ? e : new Error(String(e))
+    logger.error('Render failed', error, { outputPath })
+    sendLog('info', `Render failed: ${error.message}`)
     return false
   }
 }
@@ -65,11 +130,19 @@ export function registerFfmpegHandlers(ipcMain: IpcMain): void {
       args: ExtractFrameArgs
     ): Promise<Result<ExtractFrameResult>> => {
       try {
-        if (!args?.path) return err('VALIDATION', 'Path is required')
-        return ok(await extractFrameImpl(args))
+        // Validate input with Zod
+        const validation = safeParse(ExtractFrameArgsSchema, args)
+        if (!validation.success) {
+          logger.warn('Invalid ExtractFrame args', { errors: validation.error.issues })
+          return err(
+            'VALIDATION',
+            `Invalid arguments: ${validation.error.issues.map((e) => e.message).join(', ')}`
+          )
+        }
+
+        return ok(await extractFrameImpl(validation.data))
       } catch (e) {
-        // Теперь ошибка дойдет сюда из сервиса и будет отправлена фронтенду
-        console.error('[IPC] extractFrame error:', e)
+        logger.error('ExtractFrame error', e instanceof Error ? e : new Error(String(e)))
         return toUnknownErr(e)
       }
     }
@@ -82,11 +155,19 @@ export function registerFfmpegHandlers(ipcMain: IpcMain): void {
       payload: RenderStrategyPayload
     ): Promise<Result<RenderStrategyResult>> => {
       try {
-        if (!payload?.inputPath) return err('VALIDATION', 'inputPath is required')
-        if (!payload?.outputDir) return err('VALIDATION', 'outputDir is required')
-        if (!payload?.outputName) return err('VALIDATION', 'outputName is required')
-        return ok(await renderStrategyImpl(event, payload))
+        // Validate input with Zod
+        const validation = safeParse(RenderStrategyPayloadSchema, payload)
+        if (!validation.success) {
+          logger.warn('Invalid RenderStrategy payload', { errors: validation.error.issues })
+          return err(
+            'VALIDATION',
+            `Invalid payload: ${validation.error.issues.map((e) => e.message).join(', ')}`
+          )
+        }
+
+        return ok(await renderStrategyImpl(event, validation.data))
       } catch (e) {
+        logger.error('RenderStrategy error', e instanceof Error ? e : new Error(String(e)))
         return toUnknownErr(e)
       }
     }

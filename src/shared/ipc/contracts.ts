@@ -1,5 +1,5 @@
 // src/shared/ipc/contracts.ts
-import type { StrategyType, VideoFile } from '../types'
+import type { StrategyType, VideoFile } from '@shared/types'
 
 export type IpcErrorCode =
   | 'CANCELLED'
@@ -28,6 +28,7 @@ export type ExtractFrameArgs = {
   path: string
   strategyId?: StrategyType
   atSeconds?: number
+  profileSettings?: import('@shared/types').StrategyProfileSettings
 }
 export type ExtractFrameResult = string // dataUrl
 
@@ -43,6 +44,8 @@ export type RenderStrategyPayload = {
   overlayPath?: string
   overlayStart?: number
   overlayDuration?: number
+  overlayFadeOutDuration?: number // длительность исчезновения в миллисекундах
+  profileSettings?: import('@shared/types').StrategyProfileSettings
 
   // optional context for logs/UI
   fileId?: string
@@ -68,7 +71,8 @@ export type Api = {
   extractFrame: (
     path: string,
     strategyId?: StrategyType,
-    atSeconds?: number
+    atSeconds?: number,
+    profileSettings?: import('@shared/types').StrategyProfileSettings
   ) => Promise<Result<ExtractFrameResult>>
   saveOverlay: (dataUrl: string) => Promise<Result<SaveOverlayResult>>
   renderStrategy: (payload: RenderStrategyPayload) => Promise<Result<RenderStrategyResult>>

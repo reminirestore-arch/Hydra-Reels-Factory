@@ -1,9 +1,11 @@
 import * as fabric from 'fabric'
 import { OverlaySettings } from '@shared/types'
 import { buildDefaultOverlaySettings } from '@shared/defaults'
+import { getRendererConfig } from '@shared/config/renderer'
 
-export const CANVAS_WIDTH = 450
-export const CANVAS_HEIGHT = 800
+const config = getRendererConfig()
+export const CANVAS_WIDTH = config.canvas.width
+export const CANVAS_HEIGHT = config.canvas.height
 
 export type OverlayText = fabric.Textbox | fabric.IText | fabric.Text
 export type CanvasElementRole = 'overlay-background' | 'overlay-text' | 'frame'
@@ -79,19 +81,122 @@ export const getEventTarget = <T extends fabric.Object = fabric.Object>(
   return target as T
 }
 
+/**
+ * Анимирует плавное исчезновение OverlayBlock (текст + подложка)
+ * @param block - блок для анимации
+ * @param fadeOutDuration - длительность исчезновения в миллисекундах
+ * @param onComplete - колбэк, вызываемый после завершения анимации
+ */
+export const animateFadeOut = (
+  block: OverlayBlock,
+  fadeOutDuration: number,
+  onComplete?: () => void
+): void => {
+  if (!block.background || !block.text) return
+
+  const canvas = block.background.canvas || block.text.canvas
+  if (!canvas) return
+
+  const startOpacityBg = block.background.opacity ?? 1
+  const startOpacityText = block.text.opacity ?? 1
+
+  // Анимируем оба объекта одновременно используя fabric.util.animate
+  const animations: Promise<void>[] = []
+
+  // Анимация фона
+  animations.push(
+    new Promise<void>((resolve) => {
+      try {
+        fabric.util.animate({
+          startValue: startOpacityBg,
+          endValue: 0,
+          duration: fadeOutDuration,
+          onChange: (value: number) => {
+            block.background.set('opacity', value)
+            // Обновляем канву во время анимации
+            if (canvas) {
+              canvas.requestRenderAll()
+            }
+          },
+          onComplete: () => {
+            resolve()
+          }
+        })
+      } catch (error) {
+        console.warn('Error animating background:', error)
+        resolve()
+      }
+    })
+  )
+
+  // Анимация текста
+  animations.push(
+    new Promise<void>((resolve) => {
+      try {
+        fabric.util.animate({
+          startValue: startOpacityText,
+          endValue: 0,
+          duration: fadeOutDuration,
+          onChange: (value: number) => {
+            block.text.set('opacity', value)
+            // Обновляем канву во время анимации
+            if (canvas) {
+              canvas.requestRenderAll()
+            }
+          },
+          onComplete: () => {
+            resolve()
+          }
+        })
+      } catch (error) {
+        console.warn('Error animating text:', error)
+        resolve()
+      }
+    })
+  )
+
+  // Вызываем колбэк после завершения всех анимаций
+  Promise.all(animations).then(() => {
+    if (onComplete) {
+      onComplete()
+    }
+  })
+}
+
+/**
+ * Восстанавливает прозрачность OverlayBlock (текст + подложка) до исходных значений
+ * @param block - блок для восстановления
+ * @param backgroundOpacity - исходная прозрачность фона
+ * @param textOpacity - исходная прозрачность текста
+ */
+export const restoreFadeOut = (
+  block: OverlayBlock,
+  backgroundOpacity: number,
+  textOpacity: number
+): void => {
+  block.background.set({ opacity: backgroundOpacity })
+  block.text.set({ opacity: textOpacity })
+  const canvas = block.background.canvas
+  if (canvas) {
+    canvas.requestRenderAll()
+  }
+}
+
 export const mergeOverlaySettings = (incoming?: OverlaySettings): OverlaySettings => {
   const d = buildDefaultOverlaySettings()
   return {
     timing: {
       ...d.timing,
-      ...(incoming?.timing ?? {})
+      ...(incoming?.timing ?? {}),
+      fadeOutDuration: incoming?.timing?.fadeOutDuration ?? d.timing.fadeOutDuration ?? 500
     },
     text: {
       ...d.text,
       ...(incoming?.text ?? {}),
       align: (incoming?.text?.align ?? d.text.align ?? 'center') as 'left' | 'center' | 'right',
       color: incoming?.text?.color ?? d.text.color,
-      fontSize: incoming?.text?.fontSize ?? d.text.fontSize
+      fontSize: incoming?.text?.fontSize ?? d.text.fontSize,
+      fontWeight: incoming?.text?.fontWeight ?? d.text.fontWeight
     },
     background: {
       ...d.background,

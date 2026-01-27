@@ -9,7 +9,11 @@ export default defineConfig({
     // Electron-vite теперь сам обрабатывает внешние зависимости.
     resolve: {
       alias: {
-        '@shared': resolve('src/shared')
+        '@shared': resolve('src/shared'),
+        '@main': resolve('src/main'),
+        '@services': resolve('src/main/services'),
+        '@ipc': resolve('src/main/ipc'),
+        '@resources': resolve('resources')
       }
     }
   },
@@ -23,8 +27,12 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@renderer': resolve('src/renderer/src/app'),
-        '@shared': resolve('src/shared')
+        '@renderer': resolve('src/renderer/src'),
+        '@shared': resolve('src/shared'),
+        '@features': resolve('src/renderer/src/features'),
+        '@pages': resolve('src/renderer/src/pages'),
+        '@components': resolve('src/renderer/src/components'),
+        '@api': resolve('src/renderer/src/shared/api')
       }
     },
     plugins: [react(), tailwindcss()]

@@ -1,5 +1,5 @@
 import * as fabric from 'fabric'
-import { OverlayText, getObjectBoundingRect } from '../../utils/fabricHelpers'
+import { OverlayText, getObjectBoundingRect } from '@features/editor/utils/fabricHelpers'
 
 export const clampTextToBackground = (background: fabric.Rect, text: OverlayText): void => {
   if (!background || !text) return

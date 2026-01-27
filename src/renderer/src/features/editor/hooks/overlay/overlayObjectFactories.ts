@@ -1,10 +1,6 @@
 import * as fabric from 'fabric'
 import { OverlaySettings } from '@shared/types'
-import {
-  CANVAS_HEIGHT,
-  CANVAS_WIDTH,
-  clampRadius
-} from '../../utils/fabricHelpers'
+import { CANVAS_HEIGHT, CANVAS_WIDTH, clampRadius } from '@features/editor/utils/fabricHelpers'
 
 export const configureTextControls = (text: fabric.Textbox): void => {
   text.set({ lockUniScaling: true, objectCaching: false })
@@ -20,7 +16,7 @@ export const buildTextObject = (
     fontFamily: 'Arial',
     fill: settings.text.color,
     fontSize: settings.text.fontSize,
-    fontWeight: 'bold',
+    fontWeight: settings.text.fontWeight ?? 'bold',
     textAlign: settings.text.align,
     width: settings.background.width,
     originX: 'center',

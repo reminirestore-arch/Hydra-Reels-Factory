@@ -13,13 +13,11 @@ import {
   clampRadius,
   getObjectBoundingRect,
   getEventTarget,
-  mergeOverlaySettings
-} from '../utils/fabricHelpers'
-import {
-  getBlockId,
-  ensureOverlayIds,
-  ensureRolesOnObjects
-} from './overlay/overlayCanvasIds'
+  mergeOverlaySettings,
+  animateFadeOut,
+  restoreFadeOut
+} from '@features/editor/utils/fabricHelpers'
+import { getBlockId, ensureOverlayIds, ensureRolesOnObjects } from './overlay/overlayCanvasIds'
 import {
   attachTextToBackground,
   clampTextToBackground,
@@ -32,10 +30,7 @@ import {
   buildTextObject,
   configureTextControls
 } from './overlay/overlayObjectFactories'
-import {
-  deriveOverlaySettingsFromBlock,
-  overlaySettingsEqual
-} from './overlay/overlaySettings'
+import { deriveOverlaySettingsFromBlock, overlaySettingsEqual } from './overlay/overlaySettings'
 
 // Локальный тип для ref
 type MutableRef<T> = { current: T }
@@ -59,7 +54,24 @@ export const useOverlayLogic = ({
   overlaySettings,
   setOverlaySettings,
   initialState
-}: UseOverlayLogicProps) => {
+}: UseOverlayLogicProps): {
+  selectedBlockId: number | null
+  selectedRole: CanvasElementRole | null
+  textValue: string
+  setTextValue: (val: string) => void
+  canvasElements: CanvasElementNode[]
+  frameImageRef: MutableRef<fabric.FabricImage | null>
+  addText: () => void
+  syncOverlayObjects: () => void
+  ensureFrameImage: (imageUrl?: string) => void
+  applyOverlaySettings: () => void
+  alignTextInsideBackground: (horizontal: 'left' | 'center' | 'right') => void
+  alignTextVertically: (position: 'top' | 'center' | 'bottom') => void
+  handleCenterText: () => void
+  handleCenterBackground: (direction: 'horizontal' | 'vertical') => void
+  getOverlayBlock: (id?: number | null) => OverlayBlock | null
+  animateFadeOutBlock: (blockId?: number | null) => void
+} => {
   const overlayMapRef = useRef<Map<number, OverlayBlock>>(new Map())
   const nextBlockIdRef = useRef(1)
   const syncingFromCanvasRef = useRef(false)
@@ -161,9 +173,7 @@ export const useOverlayLogic = ({
 
       const current = canvas.backgroundImage as fabric.FabricImage | undefined
       const shouldReplace =
-        !current ||
-        current !== frame ||
-        (imageUrl && getFabricImageSource(current) !== imageUrl)
+        !current || current !== frame || (imageUrl && getFabricImageSource(current) !== imageUrl)
 
       if (shouldReplace) {
         console.log('[useOverlayLogic] Restoring background image frame')
@@ -185,20 +195,14 @@ export const useOverlayLogic = ({
     [overlaySettingsEqual, setOverlaySettings]
   )
 
-  const getOverlaySettingsFromBlock = useCallback(
-    (block: OverlayBlock): OverlaySettings => {
-      return deriveOverlaySettingsFromBlock(block, overlaySettingsRef)
-    },
-    []
-  )
+  const getOverlaySettingsFromBlock = useCallback((block: OverlayBlock): OverlaySettings => {
+    return deriveOverlaySettingsFromBlock(block, overlaySettingsRef)
+  }, [])
 
   // --- Object Builders ---
-  const buildTextObjectWithSettings = useCallback(
-    (textValueOverride?: string): fabric.Textbox => {
-      return buildTextObject(overlaySettingsRef.current, textValueOverride)
-    },
-    []
-  )
+  const buildTextObjectWithSettings = useCallback((textValueOverride?: string): fabric.Textbox => {
+    return buildTextObject(overlaySettingsRef.current, textValueOverride)
+  }, [])
 
   const buildBackgroundObjectWithSettings = useCallback((): fabric.Rect => {
     return buildBackgroundObject(overlaySettingsRef.current)
@@ -209,7 +213,12 @@ export const useOverlayLogic = ({
     (blockId: number, textValueOverride?: string): OverlayBlock => {
       const background = buildBackgroundObjectWithSettings()
       const text = buildTextObjectWithSettings(textValueOverride)
-      background.set({ data: { role: 'overlay-background', blockId } })
+      background.set({
+        data: {
+          role: 'overlay-background',
+          blockId
+        }
+      })
       text.set({ data: { role: 'overlay-text', blockId } })
       configureTextControls(text)
 
@@ -261,9 +270,9 @@ export const useOverlayLogic = ({
       }
     }
 
-    const completeBlocks = Array.from(blocks.entries()).filter(([, b]) => b.background && b.text) as Array<
-      [number, OverlayBlock]
-    >
+    const completeBlocks = Array.from(blocks.entries()).filter(
+      ([, b]) => b.background && b.text
+    ) as Array<[number, OverlayBlock]>
     overlayMapRef.current = new Map(completeBlocks)
 
     const elements: CanvasElementNode[] = [{ id: 'frame', label: 'Кадр видео', role: 'frame' }]
@@ -318,20 +327,32 @@ export const useOverlayLogic = ({
     text.set({
       fontSize: safe.text.fontSize ?? d.text.fontSize,
       fill: safe.text.color ?? d.text.color,
-      textAlign: safe.text.align ?? d.text.align
+      textAlign: safe.text.align ?? d.text.align,
+      fontWeight: safe.text.fontWeight ?? d.text.fontWeight
     })
 
     const bw = safe.background.width ?? d.background.width
     const bh = safe.background.height ?? d.background.height
     const radius = clampRadius(safe.background.radius ?? 0, bw, bh)
 
+    const currentData = background.data ?? {}
+    const currentBlockData = currentData as {
+      role?: string
+      blockId?: number
+    }
+    
     background.set({
       width: bw,
       height: bh,
       fill: safe.background.color ?? d.background.color,
       opacity: safe.background.opacity ?? d.background.opacity,
       rx: radius,
-      ry: radius
+      ry: radius,
+      data: {
+        ...currentData,
+        role: currentBlockData.role ?? 'overlay-background',
+        blockId: currentBlockData.blockId
+      }
     })
 
     if (text.width! > bw) text.set({ width: bw })
@@ -450,7 +471,7 @@ export const useOverlayLogic = ({
     if (!canvasInstance) return
     const canvas = canvasInstance
 
-    const handleObjectMoving = (e: fabric.TEvent) => {
+    const handleObjectMoving = (e: fabric.TEvent): void => {
       const target = getEventTarget<fabric.Object>(e)
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -464,8 +485,8 @@ export const useOverlayLogic = ({
       canvas.requestRenderAll()
     }
 
-    const handleTextChanged = (e: any) => {
-      const target = getEventTarget<OverlayText>(e)
+    const handleTextChanged = (e: { target: OverlayText }): void => {
+      const target = e.target
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
       if (!block) return
@@ -474,7 +495,7 @@ export const useOverlayLogic = ({
       attachTextToBackground(block.background, block.text)
     }
 
-    const handleObjectScaling = (e: fabric.TEvent) => {
+    const handleObjectScaling = (e: fabric.TEvent): void => {
       const target = getEventTarget<fabric.Object>(e)
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -489,7 +510,7 @@ export const useOverlayLogic = ({
       }
     }
 
-    const handleObjectRotating = (e: fabric.TEvent) => {
+    const handleObjectRotating = (e: fabric.TEvent): void => {
       const target = getEventTarget<fabric.Object>(e)
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
@@ -498,8 +519,10 @@ export const useOverlayLogic = ({
       }
     }
 
-    const handleObjectModified = (e: any) => {
-      const target = getEventTarget<fabric.Object>(e)
+    const handleObjectModified = (e: fabric.ModifiedEvent<fabric.TPointerEvent>): void => {
+      const target = (e.target ?? (e as unknown as { target?: fabric.Object })?.target) as
+        | fabric.Object
+        | undefined
       if (!target) return
       const block = getOverlayBlock(getBlockId(target))
       if (!block) return
@@ -542,7 +565,7 @@ export const useOverlayLogic = ({
       }
     }
 
-    const handleSelection = () => {
+    const handleSelection = (): void => {
       const active = canvas.getActiveObject()
       const role = active?.data?.role ?? null
       const blockId = getBlockId(active)
@@ -561,7 +584,7 @@ export const useOverlayLogic = ({
       }
     }
 
-    const handleCleared = () => {
+    const handleCleared = (): void => {
       setSelectedRoleIfChanged(null)
       setSelectedBlockIdIfChanged(null)
     }
@@ -701,6 +724,24 @@ export const useOverlayLogic = ({
     [fabricRef, isCanvasReadyRef, getOverlayBlock, getActiveBlockId, syncTextWithBackground]
   )
 
+  const animateFadeOutBlock = useCallback(
+    (blockId?: number | null): void => {
+      const block = getOverlayBlock(blockId ?? selectedBlockIdRef.current)
+      if (!block) return
+
+      const fadeOutDuration =
+        overlaySettingsRef.current.timing.fadeOutDuration ?? 500
+      const originalBgOpacity = block.background.opacity ?? 1
+      const originalTextOpacity = block.text.opacity ?? 1
+
+      animateFadeOut(block, fadeOutDuration, () => {
+        // После завершения анимации восстанавливаем прозрачность
+        restoreFadeOut(block, originalBgOpacity, originalTextOpacity)
+      })
+    },
+    [getOverlayBlock]
+  )
+
   return {
     selectedBlockId,
     selectedRole,
@@ -722,6 +763,7 @@ export const useOverlayLogic = ({
     handleCenterBackground,
 
     // Exposed Refs/Helpers if needed
-    getOverlayBlock
+    getOverlayBlock,
+    animateFadeOutBlock
   }
 }

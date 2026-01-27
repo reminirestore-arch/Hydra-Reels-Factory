@@ -20,10 +20,12 @@
     "composite": true,
     "baseUrl": ".",
     "paths": {
-      "@renderer/*": [
-        "src/renderer/src/*"
-      ],
-      "@shared/*": ["src/shared/*"]
+      "@renderer/*": ["src/renderer/src/*"],
+      "@shared/*": ["src/shared/*"],
+      "@features/*": ["src/renderer/src/features/*"],
+      "@pages/*": ["src/renderer/src/pages/*"],
+      "@components/*": ["src/renderer/src/components/*"],
+      "@api/*": ["src/renderer/src/shared/api/*"]
     }
   },
   "include": [

@@ -1,4 +1,4 @@
-import type { CanvasElementRole } from '../features/editor/utils/fabricHelpers'
+import type { CanvasElementRole } from '@features/editor/utils/fabricHelpers'
 
 type FabricLinkData = {
   offsetX: number

@@ -1,5 +1,6 @@
 import type { StrategyType } from '@shared/types'
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ffmpeg = require('fluent-ffmpeg')
 
 export type VideoEncoderId = 'h264_videotoolbox' | 'h264_nvenc' | 'libx264'
@@ -54,8 +55,9 @@ async function isEncoderAvailable(encoder: VideoEncoderId): Promise<boolean> {
   }
 }
 
-export async function pickEncoderProfile(_strategyId: StrategyType): Promise<EncoderProfile> {
+export async function pickEncoderProfile(_strategyId?: StrategyType): Promise<EncoderProfile> {
   // стратегию можно использовать позже, если решим разные битрейты/настройки
+  void _strategyId // пока не используется
 
   if (process.platform === 'darwin') {
     return {
