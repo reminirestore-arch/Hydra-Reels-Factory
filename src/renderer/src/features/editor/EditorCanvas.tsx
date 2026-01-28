@@ -89,6 +89,7 @@ export const EditorCanvas = ({
     syncOverlayObjects: logic.syncOverlayObjects,
     ensureFrameImage: logic.ensureFrameImage,
     frameImageRef: logic.frameImageRef,
+    setIsHydrating: logic.setIsHydrating,
     overlaySettings,
     profileSettings,
     onSave: handleSave
@@ -96,7 +97,13 @@ export const EditorCanvas = ({
 
   return (
     <div className="flex flex-col h-full w-full bg-black/95">
-      <EditorToolbar onAddText={logic.addText} onSave={hydration.handleSave} onClose={handleClose} />
+      <EditorToolbar
+        onAddText={logic.addText}
+        onDuplicateOverlay={logic.duplicateOverlayBlock}
+        hasOverlaySelected={logic.selectedBlockId != null}
+        onSave={hydration.handleSave}
+        onClose={handleClose}
+      />
 
       <div className="flex flex-1 min-h-0">
         <LayersPanel
@@ -105,6 +112,7 @@ export const EditorCanvas = ({
           selectedBlockId={logic.selectedBlockId}
           fabricRef={fabricRef}
           getOverlayBlock={logic.getOverlayBlock}
+          onRemoveBlock={logic.removeOverlayBlock}
         />
 
         <CanvasContainer hostRef={hostRef} />
@@ -117,8 +125,17 @@ export const EditorCanvas = ({
           textValue={logic.textValue}
           setTextValue={logic.setTextValue}
           strategyId={strategyId}
-          onAlignText={logic.alignTextInsideBackground}
-          onAlignVertical={logic.alignTextVertically}
+          onAlignTextBlock={logic.alignText}
+          currentVerticalAlign={useMemo(() => {
+            const block = logic.getOverlayBlock(logic.selectedBlockId)
+            if (block?.text?.data) {
+              const data = block.text.data as {
+                verticalAlignRelativeToBg?: 'top' | 'center' | 'bottom'
+              }
+              return data.verticalAlignRelativeToBg ?? 'center'
+            }
+            return 'center'
+          }, [logic.selectedBlockId, logic.getOverlayBlock])}
           onCenterText={logic.handleCenterText}
           onCenterBackground={logic.handleCenterBackground}
           updateCanvasText={useCallback(

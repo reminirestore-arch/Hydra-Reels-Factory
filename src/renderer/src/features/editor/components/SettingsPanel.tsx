@@ -1,16 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Workaround for HeroUI components that don't accept children prop in TypeScript definitions
-import { Button, ScrollShadow, Slider, Label } from '@heroui/react'
+import { Button, ScrollShadow, Label } from '@heroui/react'
 import type { Dispatch, JSX, SetStateAction } from 'react'
-import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  AlignVerticalJustifyCenter,
-  AlignVerticalJustifyEnd,
-  AlignVerticalJustifyStart
-} from 'lucide-react'
 import { OverlaySettings, StrategyProfileSettings, StrategyType } from '@shared/types'
+import { SettingsSlider } from './SettingsSlider'
+import { AlignmentButtons } from './AlignmentButtons'
+import { TextBlockAlignment } from './TextBlockAlignment'
+import { getProfileConfigs } from './profileConfigs'
 
 interface SettingsPanelProps {
   overlaySettings: OverlaySettings
@@ -20,23 +16,40 @@ interface SettingsPanelProps {
   textValue: string
   setTextValue: (v: string) => void
   strategyId: StrategyType
-  onAlignText: (h: 'left' | 'center' | 'right') => void
-  onAlignVertical: (v: 'top' | 'center' | 'bottom') => void
+  onAlignTextBlock: (options: {
+    horizontal?: 'left' | 'center' | 'right'
+    vertical?: 'top' | 'center' | 'bottom'
+  }) => void
+  currentVerticalAlign?: 'top' | 'center' | 'bottom'
   onCenterText: () => void
   onCenterBackground: (axis: 'horizontal' | 'vertical') => void
   updateCanvasText: (val: string) => void
   onTestFadeOut?: () => void
 }
 
-// Slider configuration type
-type SliderConfig = {
-  key: keyof StrategyProfileSettings
-  label: string
-  min: number
-  max: number
-  step: number
-  color: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'default'
-  description?: string
+// Хелперы для обновления состояния
+const updateTiming = (
+  setOverlaySettings: Dispatch<SetStateAction<OverlaySettings>>,
+  field: 'startTime' | 'duration' | 'fadeOutDuration',
+  value: number
+): void => {
+  setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, [field]: value } }))
+}
+
+const updateText = (
+  setOverlaySettings: Dispatch<SetStateAction<OverlaySettings>>,
+  field: keyof OverlaySettings['text'],
+  value: unknown
+): void => {
+  setOverlaySettings((p) => ({ ...p, text: { ...p.text, [field]: value } }))
+}
+
+const updateBackground = (
+  setOverlaySettings: Dispatch<SetStateAction<OverlaySettings>>,
+  field: keyof OverlaySettings['background'],
+  value: unknown
+): void => {
+  setOverlaySettings((p) => ({ ...p, background: { ...p.background, [field]: value } }))
 }
 
 export const SettingsPanel = ({
@@ -47,208 +60,14 @@ export const SettingsPanel = ({
   textValue,
   setTextValue,
   strategyId,
-  onAlignText,
-  onAlignVertical,
+  onAlignTextBlock,
+  currentVerticalAlign,
   onCenterText,
   onCenterBackground,
   updateCanvasText,
   onTestFadeOut
 }: SettingsPanelProps): JSX.Element => {
-  // Вспомогательная функция для рендеринга слайдера
-  const renderSlider = (
-    label: string,
-    value: number,
-    onChange: (v: number) => void,
-    min: number,
-    max: number,
-    step: number,
-    color: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'default' = 'primary',
-    description?: string
-  ): JSX.Element => (
-    <div className="space-y-1">
-      <Slider
-        label={label}
-        step={step}
-        maxValue={max}
-        minValue={min}
-        value={value}
-        onChange={(v) => onChange(v as number)}
-        className="w-full"
-        color={color}
-        {...({
-          children: (
-            <>
-              <Label
-                {...({
-                  children: label,
-                  className: 'text-xs font-medium text-default-600'
-                } as any)}
-              />
-              <Slider.Output {...({ className: 'text-xs font-bold text-default-600' } as any)} />
-              <Slider.Track
-                {...({
-                  className: 'bg-default-500/20',
-                  children: [<Slider.Fill key="fill" />, <Slider.Thumb key="thumb" />]
-                } as any)}
-              />
-            </>
-          )
-        } as any)}
-      />
-      {description && (
-        <p className="text-[10px] text-default-500 px-1">{description}</p>
-      )}
-    </div>
-  )
-
-  // Получить конфигурацию параметров профиля в зависимости от стратегии
-  const getProfileConfigs = (): SliderConfig[] => {
-    switch (strategyId) {
-      case 'IG1':
-        return [
-          {
-            key: 'focusStrength',
-            label: 'Сила фокуса',
-            min: 0,
-            max: 1,
-            step: 0.05,
-            color: 'primary',
-            description: 'Увеличивает кроп для эффекта зума'
-          },
-          {
-            key: 'vignetteIntensity',
-            label: 'Интенсивность виньетки',
-            min: 0,
-            max: 1,
-            step: 0.05,
-            color: 'secondary',
-            description: 'Затемнение по краям кадра'
-          },
-          {
-            key: 'contrast',
-            label: 'Контраст',
-            min: 0.8,
-            max: 1.5,
-            step: 0.05,
-            color: 'success',
-            description: 'Общий контраст изображения'
-          }
-        ]
-      case 'IG2':
-        return [
-          {
-            key: 'motionSpeed',
-            label: 'Скорость движения',
-            min: 0.8,
-            max: 1.3,
-            step: 0.01,
-            color: 'primary',
-            description: 'Скорость воспроизведения (1.0 = нормальная)'
-          },
-          {
-            key: 'saturation',
-            label: 'Насыщенность',
-            min: 0.8,
-            max: 1.5,
-            step: 0.05,
-            color: 'secondary',
-            description: 'Интенсивность цветов'
-          },
-          {
-            key: 'contrast',
-            label: 'Контраст',
-            min: 0.8,
-            max: 1.5,
-            step: 0.05,
-            color: 'success',
-            description: 'Общий контраст изображения'
-          }
-        ]
-      case 'IG3':
-        return [
-          {
-            key: 'contrast',
-            label: 'Контраст',
-            min: 0.8,
-            max: 1.5,
-            step: 0.05,
-            color: 'primary',
-            description: 'Интенсивность контраста'
-          },
-          {
-            key: 'sharpness',
-            label: 'Резкость',
-            min: 0,
-            max: 2.0,
-            step: 0.1,
-            color: 'secondary',
-            description: 'Интенсивность резкости'
-          },
-          {
-            key: 'fadeInDuration',
-            label: 'Fade In (сек)',
-            min: 0.1,
-            max: 1.0,
-            step: 0.05,
-            color: 'warning',
-            description: 'Длительность плавного появления в начале'
-          },
-          {
-            key: 'fadeOutDuration',
-            label: 'Fade Out (сек)',
-            min: 0.1,
-            max: 1.0,
-            step: 0.05,
-            color: 'warning',
-            description: 'Длительность плавного исчезновения в конце'
-          }
-        ]
-      case 'IG4':
-        return [
-          {
-            key: 'grain',
-            label: 'Зерно',
-            min: 0,
-            max: 1,
-            step: 0.05,
-            color: 'primary',
-            description: 'Интенсивность зерна/шума'
-          },
-          {
-            key: 'rotationAngle',
-            label: 'Угол поворота (°)',
-            min: -2.0,
-            max: 2.0,
-            step: 0.1,
-            color: 'secondary',
-            description: 'Небольшой наклон кадра'
-          },
-          {
-            key: 'fadeInDuration',
-            label: 'Fade In (сек)',
-            min: 0.1,
-            max: 1.0,
-            step: 0.05,
-            color: 'warning',
-            description: 'Длительность плавного появления в начале'
-          },
-          {
-            key: 'fadeOutDuration',
-            label: 'Fade Out (сек)',
-            min: 0.1,
-            max: 1.0,
-            step: 0.05,
-            color: 'warning',
-            description: 'Длительность плавного исчезновения в конце'
-          }
-        ]
-      default:
-        return []
-    }
-  }
-
-  const profileConfigs = getProfileConfigs()
-  const alignOptions = ['left', 'center', 'right'] as const
+  const profileConfigs = getProfileConfigs(strategyId)
 
   return (
     <aside className="w-96 border-l border-white/10 bg-black/60">
@@ -258,34 +77,34 @@ export const SettingsPanel = ({
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Тайминг текста
           </div>
-          {renderSlider(
-            'Старт (сек)',
-            overlaySettings.timing.startTime,
-            (v) => setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, startTime: v } })),
-            0,
-            15,
-            0.5,
-            'primary'
-          )}
-          {renderSlider(
-            'Длительность (сек)',
-            overlaySettings.timing.duration,
-            (v) => setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, duration: v } })),
-            1,
-            15,
-            0.5,
-            'secondary'
-          )}
-          {renderSlider(
-            'Скорость исчезновения (мс)',
-            overlaySettings.timing.fadeOutDuration ?? 500,
-            (v) => setOverlaySettings((p) => ({ ...p, timing: { ...p.timing, fadeOutDuration: v } })),
-            0,
-            3000,
-            50,
-            'warning',
-            'Длительность плавного исчезновения объекта в миллисекундах'
-          )}
+          <SettingsSlider
+            label="Старт (сек)"
+            value={overlaySettings.timing.startTime}
+            onChange={(v) => updateTiming(setOverlaySettings, 'startTime', v)}
+            min={0}
+            max={15}
+            step={0.5}
+            color="primary"
+          />
+          <SettingsSlider
+            label="Длительность (сек)"
+            value={overlaySettings.timing.duration}
+            onChange={(v) => updateTiming(setOverlaySettings, 'duration', v)}
+            min={1}
+            max={15}
+            step={0.5}
+            color="secondary"
+          />
+          <SettingsSlider
+            label="Скорость исчезновения (мс)"
+            value={overlaySettings.timing.fadeOutDuration ?? 500}
+            onChange={(v) => updateTiming(setOverlaySettings, 'fadeOutDuration', v)}
+            min={0}
+            max={3000}
+            step={50}
+            color="warning"
+            description="Длительность плавного исчезновения объекта в миллисекундах"
+          />
           {onTestFadeOut && (
             <Button
               size="sm"
@@ -320,27 +139,22 @@ export const SettingsPanel = ({
             />
           </div>
 
-          {renderSlider(
-            'Размер',
-            overlaySettings.text.fontSize,
-            (v) => setOverlaySettings((p) => ({ ...p, text: { ...p.text, fontSize: v } })),
-            18,
-            96,
-            2,
-            'warning'
-          )}
+          <SettingsSlider
+            label="Размер"
+            value={overlaySettings.text.fontSize}
+            onChange={(v) => updateText(setOverlaySettings, 'fontSize', v)}
+            min={18}
+            max={96}
+            step={2}
+            color="warning"
+          />
 
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Цвет</span>
             <input
               type="color"
               value={overlaySettings.text.color}
-              onChange={(e) =>
-                setOverlaySettings((p) => ({
-                  ...p,
-                  text: { ...p.text, color: e.target.value }
-                }))
-              }
+              onChange={(e) => updateText(setOverlaySettings, 'color', e.target.value)}
               className="h-8 w-16 rounded border border-white/10 bg-transparent"
             />
           </div>
@@ -349,15 +163,15 @@ export const SettingsPanel = ({
             <span className="font-medium">Насыщенность</span>
             <select
               value={overlaySettings.text.fontWeight?.toString() ?? 'bold'}
-              onChange={(e) =>
-                setOverlaySettings((p) => ({
-                  ...p,
-                  text: {
-                    ...p.text,
-                    fontWeight: e.target.value === 'normal' ? 'normal' : e.target.value === 'bold' ? 'bold' : parseInt(e.target.value, 10) || 'bold'
-                  }
-                }))
-              }
+              onChange={(e) => {
+                const fontWeight =
+                  e.target.value === 'normal'
+                    ? 'normal'
+                    : e.target.value === 'bold'
+                      ? 'bold'
+                      : parseInt(e.target.value, 10) || 'bold'
+                updateText(setOverlaySettings, 'fontWeight', fontWeight)
+              }}
               className="h-9 rounded border border-white/10 bg-black/40 px-3 text-sm text-default-200 focus:border-primary/60 focus:outline-none"
             >
               <option value="normal">Обычный</option>
@@ -371,63 +185,52 @@ export const SettingsPanel = ({
             </select>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-default-600">
-            <span className="font-medium">Выравнивание</span>
-            <div className="flex gap-1">
-              {alignOptions.map((align) => (
-                <Button
-                  key={align}
-                  size="sm"
-                  variant={overlaySettings.text.align === align ? 'primary' : 'ghost'}
-                  onPress={() => {
-                    setOverlaySettings((p) => ({ ...p, text: { ...p.text, align } }))
-                    onAlignText(align)
-                  }}
-                  className="min-w-9"
-                  {...({
-                    children:
-                      align === 'left' ? (
-                        <AlignLeft size={14} />
-                      ) : align === 'center' ? (
-                        <AlignCenter size={14} />
-                      ) : (
-                        <AlignRight size={14} />
-                      )
-                  } as any)}
-                />
-              ))}
-            </div>
+          {/* Позиция блока на подложке */}
+          <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="text-xs font-semibold text-default-400">Позиция блока на подложке</div>
+            <p className="text-[10px] text-default-500">
+              Где находится весь текстовый блок относительно подложки.
+            </p>
+            <TextBlockAlignment
+              horizontal={overlaySettings.text.align}
+              vertical={overlaySettings.text.verticalAlign ?? currentVerticalAlign ?? 'center'}
+              onHorizontalChange={(align) => {
+                updateText(setOverlaySettings, 'align', align)
+                onAlignTextBlock({ horizontal: align })
+              }}
+              onVerticalChange={(align) => {
+                updateText(setOverlaySettings, 'verticalAlign', align)
+                onAlignTextBlock({ vertical: align })
+              }}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={onCenterText}
+              className="w-full"
+              {...({ children: 'Центрировать блок внутри подложки' } as any)}
+            />
           </div>
 
-          <div className="flex items-center justify-between text-xs text-default-600">
-            <span className="font-medium">Вертикаль</span>
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => onAlignVertical('top')}
-                {...({ children: <AlignVerticalJustifyStart size={14} /> } as any)}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => onAlignVertical('center')}
-                {...({ children: <AlignVerticalJustifyCenter size={14} /> } as any)}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => onAlignVertical('bottom')}
-                {...({ children: <AlignVerticalJustifyEnd size={14} /> } as any)}
+          {/* Выравнивание содержимого внутри блока */}
+          <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="text-xs font-semibold text-default-400">Выравнивание содержимого</div>
+            <p className="text-[10px] text-default-500">
+              Как выравниваются строки текста внутри блока.
+            </p>
+            <div className="flex items-center justify-between text-xs text-default-600">
+              <span className="font-medium">Содержимое</span>
+              <AlignmentButtons
+                value={overlaySettings.text.contentAlign ?? 'center'}
+                onChange={(align) => updateText(setOverlaySettings, 'contentAlign', align)}
+                labels={{
+                  left: 'Строки влево',
+                  center: 'Строки по центру',
+                  right: 'Строки вправо'
+                }}
               />
             </div>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onPress={onCenterText}
-            {...({ children: 'Центрировать внутри подложки' } as any)}
-          />
         </div>
 
         {/* Background */}
@@ -435,66 +238,49 @@ export const SettingsPanel = ({
           <div className="text-xs text-default-500 font-bold uppercase tracking-wider">
             Подложка
           </div>
-          {renderSlider(
-            'Ширина',
-            overlaySettings.background.width,
-            (v) => setOverlaySettings((p) => ({ ...p, background: { ...p.background, width: v } })),
-            120,
-            600,
-            10,
-            'primary'
-          )}
-          {renderSlider(
-            'Высота',
-            overlaySettings.background.height,
-            (v) =>
-              setOverlaySettings((p) => ({
-                ...p,
-                background: { ...p.background, height: v }
-              })),
-            60,
-            300,
-            10,
-            'secondary'
-          )}
-          {renderSlider(
-            'Скругление',
-            overlaySettings.background.radius,
-            (v) =>
-              setOverlaySettings((p) => ({
-                ...p,
-                background: { ...p.background, radius: v }
-              })),
-            0,
-            80,
-            2,
-            'primary'
-          )}
-          {renderSlider(
-            'Прозрачность',
-            overlaySettings.background.opacity,
-            (v) =>
-              setOverlaySettings((p) => ({
-                ...p,
-                background: { ...p.background, opacity: v }
-              })),
-            0,
-            1,
-            0.05,
-            'warning'
-          )}
+          <SettingsSlider
+            label="Ширина"
+            value={overlaySettings.background.width}
+            onChange={(v) => updateBackground(setOverlaySettings, 'width', v)}
+            min={120}
+            max={600}
+            step={10}
+            color="primary"
+          />
+          <SettingsSlider
+            label="Высота"
+            value={overlaySettings.background.height}
+            onChange={(v) => updateBackground(setOverlaySettings, 'height', v)}
+            min={60}
+            max={300}
+            step={10}
+            color="secondary"
+          />
+          <SettingsSlider
+            label="Скругление"
+            value={overlaySettings.background.radius}
+            onChange={(v) => updateBackground(setOverlaySettings, 'radius', v)}
+            min={0}
+            max={80}
+            step={2}
+            color="primary"
+          />
+          <SettingsSlider
+            label="Прозрачность"
+            value={overlaySettings.background.opacity}
+            onChange={(v) => updateBackground(setOverlaySettings, 'opacity', v)}
+            min={0}
+            max={1}
+            step={0.05}
+            color="warning"
+          />
 
           <div className="flex items-center justify-between text-xs text-default-600">
             <span className="font-medium">Цвет</span>
             <input
               type="color"
               value={overlaySettings.background.color}
-              onChange={(e) =>
-                setOverlaySettings((p) => ({
-                  ...p,
-                  background: { ...p.background, color: e.target.value }
-                }))
-              }
+              onChange={(e) => updateBackground(setOverlaySettings, 'color', e.target.value)}
               className="h-8 w-16 rounded border border-white/10 bg-transparent"
             />
           </div>
@@ -524,21 +310,22 @@ export const SettingsPanel = ({
               {strategyId}
             </div>
           </div>
-          
+
           {profileConfigs.length > 0 ? (
             <div className="space-y-4">
-              {profileConfigs.map((config) =>
-                renderSlider(
-                  config.label,
-                  profileSettings[config.key] as number,
-                  (v) => setProfileSettings((p) => ({ ...p, [config.key]: v })),
-                  config.min,
-                  config.max,
-                  config.step,
-                  config.color,
-                  config.description
-                )
-              )}
+              {profileConfigs.map((config) => (
+                <SettingsSlider
+                  key={config.key}
+                  label={config.label}
+                  value={profileSettings[config.key] as number}
+                  onChange={(v) => setProfileSettings((p) => ({ ...p, [config.key]: v }))}
+                  min={config.min}
+                  max={config.max}
+                  step={config.step}
+                  color={config.color}
+                  description={config.description}
+                />
+              ))}
             </div>
           ) : (
             <p className="text-xs text-default-500">Нет доступных параметров</p>

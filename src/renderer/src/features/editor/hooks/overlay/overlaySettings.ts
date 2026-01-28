@@ -1,17 +1,8 @@
 import { OverlaySettings } from '@shared/types'
 import { buildDefaultOverlaySettings } from '@shared/defaults'
 import { OverlayBlock, mergeOverlaySettings } from '@features/editor/utils/fabricHelpers'
-import type { Textbox } from 'fabric'
 
 type MutableRef<T> = { current: T }
-
-const normalizeTextAlign = (
-  align: Textbox['textAlign'],
-  fallback: OverlaySettings['text']['align']
-): OverlaySettings['text']['align'] => {
-  if (align === 'left' || align === 'center' || align === 'right') return align
-  return fallback
-}
 
 export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): boolean => {
   return (
@@ -19,6 +10,8 @@ export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): bo
     a.timing.duration === b.timing.duration &&
     (a.timing.fadeOutDuration ?? 0) === (b.timing.fadeOutDuration ?? 0) &&
     a.text.align === b.text.align &&
+    a.text.verticalAlign === b.text.verticalAlign &&
+    a.text.contentAlign === b.text.contentAlign &&
     a.text.color === b.text.color &&
     a.text.fontSize === b.text.fontSize &&
     a.text.fontWeight === b.text.fontWeight &&
@@ -28,6 +21,32 @@ export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): bo
     a.background.height === b.background.height &&
     a.background.radius === b.background.radius
   )
+}
+
+const alignFromData = (
+  data: OverlayBlock['text']['data'],
+  fallback: OverlaySettings['text']['align']
+): OverlaySettings['text']['align'] => {
+  const h = (data as { horizontalAlignRelativeToBg?: string })?.horizontalAlignRelativeToBg
+  if (h === 'left' || h === 'center' || h === 'right') return h
+  return fallback
+}
+
+const verticalAlignFromData = (
+  data: OverlayBlock['text']['data'],
+  fallback: OverlaySettings['text']['verticalAlign']
+): OverlaySettings['text']['verticalAlign'] => {
+  const v = (data as { verticalAlignRelativeToBg?: string })?.verticalAlignRelativeToBg
+  if (v === 'top' || v === 'center' || v === 'bottom') return v
+  return fallback
+}
+
+const contentAlignFromText = (
+  textAlign: unknown,
+  fallback: OverlaySettings['text']['contentAlign']
+): OverlaySettings['text']['contentAlign'] => {
+  if (textAlign === 'left' || textAlign === 'center' || textAlign === 'right') return textAlign
+  return fallback
 }
 
 export const deriveOverlaySettingsFromBlock = (
@@ -45,7 +64,9 @@ export const deriveOverlaySettingsFromBlock = (
       ...overlaySettingsRef.current.text,
       fontSize: text.fontSize ?? defaults.text.fontSize,
       color: (text.fill as string) ?? defaults.text.color,
-      align: normalizeTextAlign(text.textAlign, defaults.text.align),
+      align: alignFromData(text.data, defaults.text.align),
+      verticalAlign: verticalAlignFromData(text.data, defaults.text.verticalAlign),
+      contentAlign: contentAlignFromText(text.textAlign, defaults.text.contentAlign),
       fontWeight: text.fontWeight ?? defaults.text.fontWeight
     },
     background: {

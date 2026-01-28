@@ -5,6 +5,7 @@ import {
   OverlayBlock
 } from '@features/editor/utils/fabricHelpers'
 import * as fabric from 'fabric'
+import { Trash2 } from 'lucide-react'
 import { JSX } from 'react'
 
 interface LayersPanelProps {
@@ -13,6 +14,7 @@ interface LayersPanelProps {
   selectedBlockId: number | null
   fabricRef: { current: fabric.Canvas | null }
   getOverlayBlock: (id?: number | null) => OverlayBlock | null
+  onRemoveBlock: (blockId: number) => void
 }
 
 export const LayersPanel = ({
@@ -20,7 +22,8 @@ export const LayersPanel = ({
   selectedRole,
   selectedBlockId,
   fabricRef,
-  getOverlayBlock
+  getOverlayBlock,
+  onRemoveBlock
 }: LayersPanelProps): JSX.Element => {
   const handleSelect = (element: CanvasElementNode): void => {
     if (element.role === 'frame') {
@@ -37,6 +40,13 @@ export const LayersPanel = ({
     }
   }
 
+  const handleRemove = (e: React.MouseEvent, blockId: number | undefined): void => {
+    e.stopPropagation()
+    if (blockId) {
+      onRemoveBlock(blockId)
+    }
+  }
+
   return (
     <aside className="w-60 border-r border-white/10 bg-black/60">
       <ScrollShadow className="h-full p-4 space-y-4">
@@ -46,31 +56,43 @@ export const LayersPanel = ({
         <div className="space-y-2 text-sm text-default-300">
           {elements.map((element) => (
             <div key={element.id} className="space-y-2">
-              <button
-                type="button"
-                onClick={() => handleSelect(element)}
-                className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm transition ${
-                  selectedRole === element.role &&
-                  (element.role === 'frame' || selectedBlockId === element.blockId)
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-white/5 hover:bg-white/10'
-                }`}
-              >
-                <span>{element.label}</span>
-                {element.children && element.children.length > 0 && (
-                  <span className="text-xs text-default-500">Группа</span>
+              <div className="relative group">
+                <button
+                  type="button"
+                  onClick={() => handleSelect(element)}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-all ${
+                    selectedRole === element.role &&
+                    (element.role === 'frame' || selectedBlockId === element.blockId)
+                      ? 'bg-primary/25 text-primary ring-2 ring-primary/60 ring-inset border-l-4 border-primary'
+                      : 'bg-white/5 hover:bg-white/10 border-l-4 border-transparent ring-2 ring-transparent ring-inset'
+                  }`}
+                >
+                  <span>{element.label}</span>
+                  {element.children && element.children.length > 0 && (
+                    <span className="text-xs text-default-500">Группа</span>
+                  )}
+                </button>
+                {element.blockId && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleRemove(e, element.blockId)}
+                    className="absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-danger-soft-hover text-danger transition-opacity"
+                    title="Удалить блок"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 )}
-              </button>
+              </div>
 
               {element.children?.map((child) => (
                 <div key={child.id} className="ml-4 space-y-2">
                   <button
                     type="button"
                     onClick={() => handleSelect(child)}
-                    className={`flex w-full items-center rounded px-3 py-2 text-left text-sm transition ${
+                    className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-all ${
                       selectedRole === child.role && selectedBlockId === child.blockId
-                        ? 'bg-primary/15 text-primary'
-                        : 'bg-white/5 hover:bg-white/10'
+                        ? 'bg-primary/25 text-primary ring-2 ring-primary/60 ring-inset border-l-4 border-primary'
+                        : 'bg-white/5 hover:bg-white/10 border-l-4 border-transparent ring-2 ring-transparent ring-inset'
                     }`}
                   >
                     {child.label}

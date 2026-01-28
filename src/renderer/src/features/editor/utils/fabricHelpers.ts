@@ -3,6 +3,16 @@ import { OverlaySettings } from '@shared/types'
 import { buildDefaultOverlaySettings } from '@shared/defaults'
 import { getRendererConfig } from '@shared/config/renderer'
 
+// ВАЖНО: Регистрируем data как кастомное свойство для автоматической сериализации
+// Это правильный способ в Fabric.js v6/v7 согласно официальной документации
+// https://fabricjs.com/docs/using-custom-properties
+if (fabric.FabricObject && typeof fabric.FabricObject.customProperties !== 'undefined') {
+  const existingProps = fabric.FabricObject.customProperties || []
+  if (!existingProps.includes('data')) {
+    fabric.FabricObject.customProperties = [...existingProps, 'data']
+  }
+}
+
 const config = getRendererConfig()
 export const CANVAS_WIDTH = config.canvas.width
 export const CANVAS_HEIGHT = config.canvas.height
@@ -40,19 +50,15 @@ export const sanitizeCanvasObjects = (canvas: fabric.Canvas): void => {
   }
 }
 
-export const canvasToJSON = (canvas: fabric.Canvas, extraProps: string[] = []): object => {
+export const canvasToJSON = (canvas: fabric.Canvas, _extraProps: string[] = []): object => {
   sanitizeCanvasObjects(canvas)
-  const uniqueProps = new Set<string>([
-    'data',
-    'id',
-    'role',
-    'lockUniScaling',
-    'selectable',
-    'evented',
-    ...extraProps
-  ])
+  // ВАЖНО: Благодаря FabricObject.customProperties = ['data'], свойство data
+  // теперь автоматически включается в сериализацию при toJSON(undefined)
+  // Это правильный способ согласно документации Fabric.js v6/v7:
+  // https://fabricjs.com/docs/using-custom-properties
   const toJSON = canvas.toJSON as unknown as (props?: string[]) => object
-  return toJSON.call(canvas, Array.from(uniqueProps))
+  // Передаем undefined, чтобы сохранить все стандартные свойства + кастомные (data)
+  return toJSON.call(canvas, undefined)
 }
 
 export const cloneCanvasState = (state: object): object => {
@@ -194,6 +200,14 @@ export const mergeOverlaySettings = (incoming?: OverlaySettings): OverlaySetting
       ...d.text,
       ...(incoming?.text ?? {}),
       align: (incoming?.text?.align ?? d.text.align ?? 'center') as 'left' | 'center' | 'right',
+      verticalAlign: (incoming?.text?.verticalAlign ?? d.text.verticalAlign ?? 'center') as
+        | 'top'
+        | 'center'
+        | 'bottom',
+      contentAlign: (incoming?.text?.contentAlign ?? d.text.contentAlign ?? 'center') as
+        | 'left'
+        | 'center'
+        | 'right',
       color: incoming?.text?.color ?? d.text.color,
       fontSize: incoming?.text?.fontSize ?? d.text.fontSize,
       fontWeight: incoming?.text?.fontWeight ?? d.text.fontWeight

@@ -35,6 +35,18 @@ import { deriveOverlaySettingsFromBlock, overlaySettingsEqual } from './overlay/
 // Локальный тип для ref
 type MutableRef<T> = { current: T }
 
+type AlignmentOverride = {
+  link: { offsetX: number; offsetY: number; rotationOffset?: number }
+  horizontalAlignRelativeToBg?: 'left' | 'center' | 'right'
+  verticalAlignRelativeToBg?: 'top' | 'center' | 'bottom'
+}
+
+type BackgroundOverride = {
+  angle?: number
+  left?: number
+  top?: number
+}
+
 const getFabricImageSource = (image?: fabric.FabricImage | null): string | undefined =>
   image?.getSrc?.()
 
@@ -62,19 +74,25 @@ export const useOverlayLogic = ({
   canvasElements: CanvasElementNode[]
   frameImageRef: MutableRef<fabric.FabricImage | null>
   addText: () => void
+  duplicateOverlayBlock: () => void
+  removeOverlayBlock: (blockId: number) => void
   syncOverlayObjects: () => void
   ensureFrameImage: (imageUrl?: string) => void
   applyOverlaySettings: () => void
-  alignTextInsideBackground: (horizontal: 'left' | 'center' | 'right') => void
-  alignTextVertically: (position: 'top' | 'center' | 'bottom') => void
+  alignText: (options: {
+    horizontal?: 'left' | 'center' | 'right'
+    vertical?: 'top' | 'center' | 'bottom'
+  }) => void
   handleCenterText: () => void
   handleCenterBackground: (direction: 'horizontal' | 'vertical') => void
   getOverlayBlock: (id?: number | null) => OverlayBlock | null
   animateFadeOutBlock: (blockId?: number | null) => void
+  setIsHydrating: (value: boolean) => void
 } => {
   const overlayMapRef = useRef<Map<number, OverlayBlock>>(new Map())
   const nextBlockIdRef = useRef(1)
   const syncingFromCanvasRef = useRef(false)
+  const isHydratingRef = useRef(false)
   const frameImageRef = useRef<fabric.FabricImage | null>(null)
 
   const overlaySettingsRef = useRef(overlaySettings)
@@ -192,7 +210,7 @@ export const useOverlayLogic = ({
         setOverlaySettings(next)
       }
     },
-    [overlaySettingsEqual, setOverlaySettings]
+    [setOverlaySettings]
   )
 
   const getOverlaySettingsFromBlock = useCallback((block: OverlayBlock): OverlaySettings => {
@@ -200,19 +218,45 @@ export const useOverlayLogic = ({
   }, [])
 
   // --- Object Builders ---
-  const buildTextObjectWithSettings = useCallback((textValueOverride?: string): fabric.Textbox => {
-    return buildTextObject(overlaySettingsRef.current, textValueOverride)
-  }, [])
+  const buildTextObjectWithSettings = useCallback(
+    (
+      settings: OverlaySettings,
+      textValueOverride?: string,
+      textWidthOverride?: number,
+      textHeightOverride?: number
+    ): fabric.Textbox => {
+      return buildTextObject(settings, textValueOverride, textWidthOverride, textHeightOverride)
+    },
+    []
+  )
 
-  const buildBackgroundObjectWithSettings = useCallback((): fabric.Rect => {
-    return buildBackgroundObject(overlaySettingsRef.current)
-  }, [])
+  const buildBackgroundObjectWithSettings = useCallback(
+    (settings: OverlaySettings): fabric.Rect => {
+      return buildBackgroundObject(settings)
+    },
+    []
+  )
 
   // --- Core Logic ---
   const createOverlayBlock = useCallback(
-    (blockId: number, textValueOverride?: string): OverlayBlock => {
-      const background = buildBackgroundObjectWithSettings()
-      const text = buildTextObjectWithSettings(textValueOverride)
+    (
+      blockId: number,
+      textValueOverride?: string,
+      textWidthOverride?: number,
+      textHeightOverride?: number,
+      alignmentOverride?: AlignmentOverride,
+      backgroundOverride?: BackgroundOverride,
+      settingsOverride?: OverlaySettings
+    ): OverlayBlock => {
+      // Используем переданные настройки или дефолтные, если не переданы
+      const settings = settingsOverride ?? buildDefaultOverlaySettings()
+      const background = buildBackgroundObjectWithSettings(settings)
+      const text = buildTextObjectWithSettings(
+        settings,
+        textValueOverride,
+        textWidthOverride,
+        textHeightOverride
+      )
       background.set({
         data: {
           role: 'overlay-background',
@@ -229,18 +273,37 @@ export const useOverlayLogic = ({
         canvas.bringObjectToFront(text)
       }
 
+      if (backgroundOverride) {
+        const bgUpdates: { angle?: number; left?: number; top?: number } = {}
+        if (typeof backgroundOverride.angle === 'number') bgUpdates.angle = backgroundOverride.angle
+        if (typeof backgroundOverride.left === 'number') bgUpdates.left = backgroundOverride.left
+        if (typeof backgroundOverride.top === 'number') bgUpdates.top = backgroundOverride.top
+        if (Object.keys(bgUpdates).length > 0) {
+          background.set(bgUpdates)
+          background.setCoords()
+        }
+      }
+
+      if (alignmentOverride?.link && typeof alignmentOverride.link.offsetX === 'number') {
+        text.set({
+          data: {
+            ...(text.data ?? {}),
+            link: alignmentOverride.link,
+            ...(alignmentOverride.horizontalAlignRelativeToBg != null && {
+              horizontalAlignRelativeToBg: alignmentOverride.horizontalAlignRelativeToBg
+            }),
+            ...(alignmentOverride.verticalAlignRelativeToBg != null && {
+              verticalAlignRelativeToBg: alignmentOverride.verticalAlignRelativeToBg
+            })
+          }
+        })
+        syncTextWithBackground(background, text)
+      }
       attachTextToBackground(background, text)
       clampTextToBackground(background, text)
       return { id: blockId, background, text }
     },
-    [
-      buildBackgroundObjectWithSettings,
-      buildTextObjectWithSettings,
-      attachTextToBackground,
-      clampTextToBackground,
-      fabricRef,
-      isCanvasReadyRef
-    ]
+    [buildBackgroundObjectWithSettings, buildTextObjectWithSettings, fabricRef, isCanvasReadyRef]
   )
 
   const rebuildOverlayMap = useCallback((): void => {
@@ -296,11 +359,16 @@ export const useOverlayLogic = ({
     })
     setCanvasElements(elements)
 
-    const activeBlock = getOverlayBlock(getActiveBlockId())
-    if (activeBlock) {
-      setOverlaySettingsIfChanged(getOverlaySettingsFromBlock(activeBlock))
-      setTextValueIfChanged(activeBlock.text.text ?? '')
+    // Применяем настройки только если блок действительно выбран (не используем fallback)
+    // Это предотвращает применение настроек к неправильному блоку при снятии выделения или удалении
+    if (selectedBlockIdRef.current !== null) {
+      const activeBlock = getOverlayBlock(selectedBlockIdRef.current)
+      if (activeBlock) {
+        setOverlaySettingsIfChanged(getOverlaySettingsFromBlock(activeBlock))
+        setTextValueIfChanged(activeBlock.text.text ?? '')
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     ensureRolesOnObjects,
     ensureOverlayIds,
@@ -316,20 +384,38 @@ export const useOverlayLogic = ({
 
   const applyOverlaySettings = useCallback((): void => {
     const canvas = fabricRef.current
-    if (!canvas || !isCanvasReadyRef.current || syncingFromCanvasRef.current) return
-    const activeBlock = getOverlayBlock(getActiveBlockId())
+    if (!canvas || !isCanvasReadyRef.current || syncingFromCanvasRef.current || isHydratingRef.current) return
+
+    // Применяем настройки только если блок действительно выбран (не используем fallback)
+    // Это предотвращает применение настроек к неправильному блоку при снятии выделения
+    if (selectedBlockIdRef.current === null) return
+
+    const activeBlock = getOverlayBlock(selectedBlockIdRef.current)
     if (!activeBlock) return
 
     const d = buildDefaultOverlaySettings()
     const safe = mergeOverlaySettings(overlaySettingsRef.current)
     const { text, background } = activeBlock
 
+    // Сохраняем текущие размеры текста перед применением настроек
+    const currentTextWidth = text.width
+    const currentTextHeight = text.height
+
     text.set({
       fontSize: safe.text.fontSize ?? d.text.fontSize,
       fill: safe.text.color ?? d.text.color,
-      textAlign: safe.text.align ?? d.text.align,
-      fontWeight: safe.text.fontWeight ?? d.text.fontWeight
+      fontWeight: safe.text.fontWeight ?? d.text.fontWeight,
+      textAlign: safe.text.contentAlign ?? d.text.contentAlign ?? 'center'
     })
+
+    // Восстанавливаем размеры текста, если они были установлены
+    // Это важно для сохранения правильных размеров после восстановления из JSON
+    if (currentTextWidth != null && currentTextWidth > 0) {
+      text.set({ width: currentTextWidth })
+    }
+    if (currentTextHeight != null && currentTextHeight > 0) {
+      text.set({ height: currentTextHeight })
+    }
 
     const bw = safe.background.width ?? d.background.width
     const bh = safe.background.height ?? d.background.height
@@ -340,7 +426,7 @@ export const useOverlayLogic = ({
       role?: string
       blockId?: number
     }
-    
+
     background.set({
       width: bw,
       height: bh,
@@ -355,21 +441,19 @@ export const useOverlayLogic = ({
       }
     })
 
-    if (text.width! > bw) text.set({ width: bw })
+    // Ограничиваем ширину текста только если она превышает ширину фона
+    // Но не перезаписываем, если размер был сохранен из JSON
+    if (currentTextWidth == null || currentTextWidth <= 0) {
+      if (text.width! > bw) text.set({ width: bw })
+    } else if (currentTextWidth > bw) {
+      text.set({ width: bw })
+    }
 
     clampTextToBackground(background, text)
     attachTextToBackground(background, text)
     ensureFrameImage()
     if (canvas.contextContainer) canvas.requestRenderAll()
-  }, [
-    fabricRef,
-    isCanvasReadyRef,
-    getOverlayBlock,
-    getActiveBlockId,
-    clampTextToBackground,
-    attachTextToBackground,
-    ensureFrameImage
-  ])
+  }, [fabricRef, isCanvasReadyRef, getOverlayBlock, ensureFrameImage])
 
   const syncOverlayObjects = useCallback((): void => {
     const canvas = fabricRef.current
@@ -394,9 +478,20 @@ export const useOverlayLogic = ({
       const hasText = objects.some((o) => o instanceof fabric.Textbox || o instanceof fabric.IText)
       if (!hasText) {
         const blockId = nextBlockIdRef.current++
-        const block = createOverlayBlock(blockId, textValueRef.current)
+        // Используем дефолтные настройки для начального блока
+        const defaultSettings = buildDefaultOverlaySettings()
+        const block = createOverlayBlock(
+          blockId,
+          textValueRef.current,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          defaultSettings
+        )
         overlayMapRef.current.set(blockId, block)
         applyOverlaySettings()
+        rebuildOverlayMap()
       }
     } else if (!selectedBlockIdRef.current) {
       const first = Array.from(overlayMapRef.current.values())[0]
@@ -414,6 +509,31 @@ export const useOverlayLogic = ({
     }
 
     for (const block of Array.from(overlayMapRef.current.values())) {
+      // Восстанавливаем сохраненные размеры текста из data, если они есть
+      // Это важно для правильного восстановления размеров после загрузки из JSON
+      const textData = block.text.data as {
+        savedWidth?: number
+        savedHeight?: number
+        role?: string
+        blockId?: number
+        link?: unknown
+        horizontalAlignRelativeToBg?: string
+        verticalAlignRelativeToBg?: string
+      }
+      if (textData?.savedWidth != null && textData.savedWidth > 0) {
+        // Для Textbox важно установить ширину и пересчитать переносы строк
+        if (block.text instanceof fabric.Textbox) {
+          block.text.set({ width: textData.savedWidth })
+          // Принудительно пересчитываем переносы строк с правильной шириной
+          block.text.initDimensions()
+        } else {
+          block.text.set({ width: textData.savedWidth })
+        }
+      }
+      if (textData?.savedHeight != null && textData.savedHeight > 0) {
+        block.text.set({ height: textData.savedHeight })
+      }
+
       const restored = restoreLinkFromText(block.background, block.text)
       if (!restored) attachTextToBackground(block.background, block.text)
       clampTextToBackground(block.background, block.text)
@@ -424,22 +544,16 @@ export const useOverlayLogic = ({
 
     ensureFrameImage()
     if (canvas.contextContainer && isCanvasReadyRef.current) canvas.requestRenderAll()
-    rebuildOverlayMap()
+    // rebuildOverlayMap уже был вызван выше, не нужно вызывать дважды
   }, [
     fabricRef,
-    ensureRolesOnObjects,
-    ensureOverlayIds,
     rebuildOverlayMap,
     createOverlayBlock,
     applyOverlaySettings,
     getOverlaySettingsFromBlock,
     setOverlaySettingsIfChanged,
     setTextValueIfChanged,
-    restoreLinkFromText,
-    attachTextToBackground,
-    clampTextToBackground,
     ensureFrameImage,
-    configureTextControls,
     isCanvasReadyRef,
     setSelectedBlockIdIfChanged
   ])
@@ -449,11 +563,23 @@ export const useOverlayLogic = ({
     const canvas = fabricRef.current
     if (!canvas || !isCanvasReadyRef.current) return
     const blockId = nextBlockIdRef.current++
-    const block = createOverlayBlock(blockId)
+    // Используем дефолтные настройки для нового блока
+    const defaultSettings = buildDefaultOverlaySettings()
+    const block = createOverlayBlock(
+      blockId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      defaultSettings
+    )
     overlayMapRef.current.set(blockId, block)
     canvas.setActiveObject(block.text)
     setSelectedRoleIfChanged('overlay-text')
     setSelectedBlockIdIfChanged(blockId)
+    // Обновляем настройки UI на дефолтные для нового блока
+    setOverlaySettingsIfChanged(defaultSettings)
     ensureFrameImage()
     rebuildOverlayMap()
   }, [
@@ -463,13 +589,137 @@ export const useOverlayLogic = ({
     ensureFrameImage,
     rebuildOverlayMap,
     setSelectedRoleIfChanged,
-    setSelectedBlockIdIfChanged
+    setSelectedBlockIdIfChanged,
+    setOverlaySettingsIfChanged
   ])
+
+  const duplicateOverlayBlock = useCallback((): void => {
+    const canvas = fabricRef.current
+    if (!canvas || !isCanvasReadyRef.current) return
+    const selectedId = selectedBlockIdRef.current
+    if (selectedId == null) return
+    const sourceBlock = getOverlayBlock(selectedId)
+    if (!sourceBlock) return
+
+    const blockId = nextBlockIdRef.current++
+    const sourceText = sourceBlock.text.text ?? undefined
+    // Получаем базовую ширину, учитывая scale если он не равен 1
+    const baseWidth = sourceBlock.text.width ?? 0
+    const scaleX = sourceBlock.text.scaleX ?? 1
+    const sourceTextWidth = baseWidth > 0 ? baseWidth * scaleX : sourceBlock.text.getScaledWidth()
+    // Получаем базовую высоту, учитывая scale если он не равен 1
+    const baseHeight = sourceBlock.text.height ?? 0
+    const scaleY = sourceBlock.text.scaleY ?? 1
+    const sourceTextHeight =
+      baseHeight > 0 ? baseHeight * scaleY : sourceBlock.text.getScaledHeight()
+
+    let alignmentOverride: AlignmentOverride | undefined
+    if (sourceBlock.text?.data) {
+      const d = sourceBlock.text.data as {
+        link?: { offsetX: number; offsetY: number; rotationOffset?: number }
+        horizontalAlignRelativeToBg?: 'left' | 'center' | 'right'
+        verticalAlignRelativeToBg?: 'top' | 'center' | 'bottom'
+      }
+      if (d.link && typeof d.link.offsetX === 'number') {
+        alignmentOverride = {
+          link: d.link,
+          ...(d.horizontalAlignRelativeToBg != null && {
+            horizontalAlignRelativeToBg: d.horizontalAlignRelativeToBg
+          }),
+          ...(d.verticalAlignRelativeToBg != null && {
+            verticalAlignRelativeToBg: d.verticalAlignRelativeToBg
+          })
+        }
+      }
+    }
+
+    const backgroundOverride: BackgroundOverride = {
+      angle: sourceBlock.background.angle ?? 0,
+      left:
+        typeof sourceBlock.background.left === 'number' ? sourceBlock.background.left : undefined,
+      top: typeof sourceBlock.background.top === 'number' ? sourceBlock.background.top : undefined
+    }
+
+    // При дублировании используем настройки из исходного блока
+    const sourceSettings = getOverlaySettingsFromBlock(sourceBlock)
+    const block = createOverlayBlock(
+      blockId,
+      sourceText,
+      sourceTextWidth,
+      sourceTextHeight,
+      alignmentOverride,
+      backgroundOverride,
+      sourceSettings
+    )
+    overlayMapRef.current.set(blockId, block)
+    canvas.setActiveObject(block.text)
+    setSelectedRoleIfChanged('overlay-text')
+    setSelectedBlockIdIfChanged(blockId)
+    // Обновляем настройки UI на настройки дублированного блока
+    setOverlaySettingsIfChanged(sourceSettings)
+    setTextValueIfChanged(block.text.text ?? '')
+    ensureFrameImage()
+    rebuildOverlayMap()
+  }, [
+    fabricRef,
+    isCanvasReadyRef,
+    getOverlayBlock,
+    getOverlaySettingsFromBlock,
+    createOverlayBlock,
+    ensureFrameImage,
+    rebuildOverlayMap,
+    setSelectedRoleIfChanged,
+    setSelectedBlockIdIfChanged,
+    setOverlaySettingsIfChanged,
+    setTextValueIfChanged
+  ])
+
+  const removeOverlayBlock = useCallback(
+    (blockId: number): void => {
+      const canvas = fabricRef.current
+      if (!canvas || !isCanvasReadyRef.current) return
+      const block = getOverlayBlock(blockId)
+      if (!block) return
+
+      // Запоминаем, был ли удаляемый блок выбран
+      const wasSelected = selectedBlockIdRef.current === blockId
+
+      // Удаляем объекты с канвы
+      canvas.remove(block.background)
+      canvas.remove(block.text)
+
+      // Удаляем из карты
+      overlayMapRef.current.delete(blockId)
+
+      // Если удаляемый блок был выбран, сбрасываем выбор ДО обновления карты
+      // Это важно, чтобы rebuildOverlayMap не применял настройки к другому блоку
+      if (wasSelected) {
+        setSelectedRoleIfChanged(null)
+        setSelectedBlockIdIfChanged(null)
+        canvas.discardActiveObject()
+      }
+
+      // Обновляем карту и канву
+      // rebuildOverlayMap проверит selectedBlockIdRef.current и не применит настройки,
+      // если выбор был сброшен
+      rebuildOverlayMap()
+      canvas.requestRenderAll()
+    },
+    [
+      fabricRef,
+      isCanvasReadyRef,
+      getOverlayBlock,
+      rebuildOverlayMap,
+      setSelectedRoleIfChanged,
+      setSelectedBlockIdIfChanged
+    ]
+  )
 
   // --- Event Listeners ---
   useEffect(() => {
     if (!canvasInstance) return
     const canvas = canvasInstance
+    syncOverlayObjects()
 
     const handleObjectMoving = (e: fabric.TEvent): void => {
       const target = getEventTarget<fabric.Object>(e)
@@ -491,6 +741,18 @@ export const useOverlayLogic = ({
       const block = getOverlayBlock(getBlockId(target))
       if (!block) return
       updateTextValueFromCanvas(block.text)
+      // Обновляем сохраненные размеры в data при изменении текста
+      const currentWidth = block.text.width
+      const currentHeight = block.text.height
+      if (currentWidth != null && currentHeight != null) {
+        block.text.set({
+          data: {
+            ...(block.text.data ?? {}),
+            savedWidth: currentWidth,
+            savedHeight: currentHeight
+          }
+        })
+      }
       clampTextToBackground(block.background, block.text)
       attachTextToBackground(block.background, block.text)
     }
@@ -535,6 +797,18 @@ export const useOverlayLogic = ({
         const nextSize = Math.max(1, Math.round(curSize * s))
         t.set({ fontSize: nextSize, scaleX: 1, scaleY: 1 })
         t.setCoords()
+        // Обновляем сохраненные размеры в data после изменения размера шрифта
+        const currentWidth = t.width
+        const currentHeight = t.height
+        if (currentWidth != null && currentHeight != null) {
+          t.set({
+            data: {
+              ...(t.data ?? {}),
+              savedWidth: currentWidth,
+              savedHeight: currentHeight
+            }
+          })
+        }
         if (getActiveBlockId() === block.id) {
           setOverlaySettingsIfChanged({
             ...overlaySettingsRef.current,
@@ -610,14 +884,10 @@ export const useOverlayLogic = ({
     }
   }, [
     canvasInstance,
+    syncOverlayObjects,
     getOverlayBlock,
-    getBlockId,
     getActiveBlockId,
-    syncTextWithBackground,
-    clampTextToBackground,
-    attachTextToBackground,
     updateTextValueFromCanvas,
-    updateLinkOffsets,
     getOverlaySettingsFromBlock,
     setOverlaySettingsIfChanged,
     setSelectedRoleIfChanged,
@@ -626,71 +896,78 @@ export const useOverlayLogic = ({
   ])
 
   // --- Alignment Helpers ---
-  const alignTextInsideBackground = useCallback(
-    (horizontal: 'left' | 'center' | 'right') => {
+  const alignText = useCallback(
+    (options: {
+      horizontal?: 'left' | 'center' | 'right'
+      vertical?: 'top' | 'center' | 'bottom'
+    }) => {
       const canvas = fabricRef.current
       if (!canvas || !isCanvasReadyRef.current) return
       const block = getOverlayBlock(getActiveBlockId())
       if (!block) return
 
+      // Если не указано ни одно из выравниваний, ничего не делаем
+      if (options.horizontal == null && options.vertical == null) return
+
       const { background, text } = block
       background.setCoords()
       text.setCoords()
       const rect = getObjectBoundingRect(background)
-      const textW = text.getScaledWidth()
-      const pad = 16
+      
+      // Получаем текущие значения выравнивания из data или используем 'center' по умолчанию
+      const currentData = text.data as {
+        horizontalAlignRelativeToBg?: 'left' | 'center' | 'right'
+        verticalAlignRelativeToBg?: 'top' | 'center' | 'bottom'
+      } | undefined
+      
+      const horizontal = options.horizontal ?? currentData?.horizontalAlignRelativeToBg ?? 'center'
+      const vertical = options.vertical ?? currentData?.verticalAlignRelativeToBg ?? 'center'
 
-      let tx = rect.left + rect.width / 2
-      if (horizontal === 'left') tx = rect.left + pad + textW / 2
-      if (horizontal === 'right') tx = rect.left + rect.width - pad - textW / 2
+      const updates: Parameters<typeof text.set>[0] = {
+        data: {
+          ...(text.data ?? {}),
+          ...(options.horizontal != null && { horizontalAlignRelativeToBg: horizontal }),
+          ...(options.vertical != null && { verticalAlignRelativeToBg: vertical })
+        }
+      }
 
-      text.set({ left: tx, textAlign: horizontal, originX: 'center' })
+      // Вычисляем и применяем горизонтальное выравнивание только если оно указано
+      if (options.horizontal != null) {
+        const textW = text.getScaledWidth()
+        const pad = 16
+        let tx = rect.left + rect.width / 2 // center по умолчанию
+        if (horizontal === 'left') {
+          tx = rect.left + pad + textW / 2
+        } else if (horizontal === 'right') {
+          tx = rect.left + rect.width - pad - textW / 2
+        }
+        updates.left = tx
+        updates.originX = 'center'
+      }
+
+      // Вычисляем и применяем вертикальное выравнивание только если оно указано
+      if (options.vertical != null) {
+        const textH = text.getScaledHeight()
+        let ty = rect.top + rect.height / 2 // center по умолчанию
+        if (vertical === 'top') {
+          ty = rect.top + textH / 2
+        } else if (vertical === 'bottom') {
+          ty = rect.top + rect.height - textH / 2
+        }
+        updates.top = ty
+        updates.originY = 'center'
+      }
+
+      text.set(updates)
+      
+      // Обновляем связи и ограничения
       updateLinkOffsets(background, text)
-      clampTextToBackground(background, text)
-      canvas.requestRenderAll()
-    },
-    [
-      fabricRef,
-      isCanvasReadyRef,
-      getOverlayBlock,
-      getActiveBlockId,
-      updateLinkOffsets,
-      clampTextToBackground
-    ]
-  )
-
-  const alignTextVertically = useCallback(
-    (vertical: 'top' | 'center' | 'bottom') => {
-      const canvas = fabricRef.current
-      if (!canvas || !isCanvasReadyRef.current) return
-      const block = getOverlayBlock(getActiveBlockId())
-      if (!block) return
-
-      const { background, text } = block
-      background.setCoords()
-      text.setCoords()
-      const rect = getObjectBoundingRect(background)
-      const textH = text.getScaledHeight()
-
-      let ty = rect.top + rect.height / 2
-      if (vertical === 'top') ty = rect.top + textH / 2
-      if (vertical === 'bottom') ty = rect.top + rect.height - textH / 2
-
-      text.set({ top: ty, originY: 'center' })
       clampTextToBackground(background, text)
       attachTextToBackground(background, text)
       ensureFrameImage()
       canvas.requestRenderAll()
     },
-    [
-      fabricRef,
-      isCanvasReadyRef,
-      getOverlayBlock,
-      getActiveBlockId,
-      clampTextToBackground,
-      attachTextToBackground,
-      ensureFrameImage
-    ]
+    [fabricRef, isCanvasReadyRef, getOverlayBlock, getActiveBlockId, ensureFrameImage]
   )
 
   const handleCenterText = useCallback(() => {
@@ -706,7 +983,7 @@ export const useOverlayLogic = ({
     })
     attachTextToBackground(block.background, block.text)
     canvas.requestRenderAll()
-  }, [fabricRef, isCanvasReadyRef, getOverlayBlock, getActiveBlockId, attachTextToBackground])
+  }, [fabricRef, isCanvasReadyRef, getOverlayBlock, getActiveBlockId])
 
   const handleCenterBackground = useCallback(
     (axis: 'horizontal' | 'vertical') => {
@@ -721,7 +998,7 @@ export const useOverlayLogic = ({
       syncTextWithBackground(block.background, block.text)
       canvas.requestRenderAll()
     },
-    [fabricRef, isCanvasReadyRef, getOverlayBlock, getActiveBlockId, syncTextWithBackground]
+    [fabricRef, isCanvasReadyRef, getOverlayBlock, getActiveBlockId]
   )
 
   const animateFadeOutBlock = useCallback(
@@ -729,8 +1006,7 @@ export const useOverlayLogic = ({
       const block = getOverlayBlock(blockId ?? selectedBlockIdRef.current)
       if (!block) return
 
-      const fadeOutDuration =
-        overlaySettingsRef.current.timing.fadeOutDuration ?? 500
+      const fadeOutDuration = overlaySettingsRef.current.timing.fadeOutDuration ?? 500
       const originalBgOpacity = block.background.opacity ?? 1
       const originalTextOpacity = block.text.opacity ?? 1
 
@@ -742,6 +1018,10 @@ export const useOverlayLogic = ({
     [getOverlayBlock]
   )
 
+  const setIsHydrating = useCallback((value: boolean): void => {
+    isHydratingRef.current = value
+  }, [])
+
   return {
     selectedBlockId,
     selectedRole,
@@ -752,18 +1032,20 @@ export const useOverlayLogic = ({
 
     // Actions
     addText,
+    duplicateOverlayBlock,
+    removeOverlayBlock,
     syncOverlayObjects,
     ensureFrameImage,
     applyOverlaySettings,
 
     // Alignment
-    alignTextInsideBackground,
-    alignTextVertically,
+    alignText,
     handleCenterText,
     handleCenterBackground,
 
     // Exposed Refs/Helpers if needed
     getOverlayBlock,
-    animateFadeOutBlock
+    animateFadeOutBlock,
+    setIsHydrating
   }
 }

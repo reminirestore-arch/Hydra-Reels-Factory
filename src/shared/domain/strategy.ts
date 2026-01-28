@@ -11,7 +11,12 @@ export interface OverlayTiming {
 export interface TextStyleSettings {
   fontSize: number
   color: string
+  /** Позиция блока относительно подложки (горизонталь). */
   align: 'left' | 'center' | 'right'
+  /** Позиция блока относительно подложки (вертикаль). */
+  verticalAlign: 'top' | 'center' | 'bottom'
+  /** Выравнивание строк текста внутри блока. */
+  contentAlign: 'left' | 'center' | 'right'
   fontWeight?: string | number
 }
 
@@ -64,7 +69,14 @@ export interface VideoStrategy {
 
 export const createDefaultOverlaySettings = (): OverlaySettings => ({
   timing: { startTime: 0, duration: 5, fadeOutDuration: 500 },
-  text: { fontSize: 42, color: '#ffffff', align: 'center', fontWeight: 'bold' },
+  text: {
+    fontSize: 42,
+    color: '#ffffff',
+    align: 'center',
+    verticalAlign: 'center',
+    contentAlign: 'center',
+    fontWeight: 'bold'
+  },
   background: {
     width: 420,
     height: 160,

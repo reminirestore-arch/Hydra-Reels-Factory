@@ -1,16 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Workaround for HeroUI components that don't accept children prop in TypeScript definitions
 import { Button } from '@heroui/react'
-import { MonitorPlay, Save, Type, X } from 'lucide-react'
+import { CopyPlus, MonitorPlay, Save, Type, X } from 'lucide-react'
 import { JSX } from 'react'
 
 interface EditorToolbarProps {
   onAddText: () => void
+  onDuplicateOverlay: () => void
+  hasOverlaySelected: boolean
   onSave: () => void
   onClose: () => void
 }
 
-export const EditorToolbar = ({ onAddText, onSave, onClose }: EditorToolbarProps): JSX.Element => {
+export const EditorToolbar = ({
+  onAddText,
+  onDuplicateOverlay,
+  hasOverlaySelected,
+  onSave,
+  onClose
+}: EditorToolbarProps): JSX.Element => {
   return (
     <div className="h-16 bg-black/50 border-b border-white/10 flex items-center justify-between px-6 shrink-0 backdrop-blur-md">
       <div className="flex gap-3">
@@ -24,6 +32,22 @@ export const EditorToolbar = ({ onAddText, onSave, onClose }: EditorToolbarProps
               <>
                 <Type size={16} />
                 Добавить текст
+              </>
+            )
+          } as any)}
+        />
+        <Button
+          size="sm"
+          variant="flat"
+          isDisabled={!hasOverlaySelected}
+          onPress={onDuplicateOverlay}
+          className="font-medium"
+          title={hasOverlaySelected ? 'Дублировать выделенный блок' : 'Выделите блок для дублирования'}
+          {...({
+            children: (
+              <>
+                <CopyPlus size={16} />
+                Дублировать
               </>
             )
           } as any)}

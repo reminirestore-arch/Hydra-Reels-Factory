@@ -14,6 +14,8 @@ export const TextStyleSettingsSchema = z.object({
   fontSize: z.number().int().min(8).max(200),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color'),
   align: z.enum(['left', 'center', 'right']),
+  verticalAlign: z.enum(['top', 'center', 'bottom']).default('center'),
+  contentAlign: z.enum(['left', 'center', 'right']).default('center'),
   fontWeight: z.union([z.string(), z.number()]).optional()
 })
 
