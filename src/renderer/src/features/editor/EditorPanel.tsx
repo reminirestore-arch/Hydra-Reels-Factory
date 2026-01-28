@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// Workaround for HeroUI components that don't accept children prop in TypeScript definitions
-import { JSX } from 'react'
+import type { JSX } from 'react'
 import { Button, Card, Chip, ScrollShadow } from '@heroui/react'
 import { VideoFile, StrategyType } from '@shared/types'
+import { STRATEGY_META } from '@shared/config/strategies'
 import { Wand2, Zap, Activity, Layers, Play } from 'lucide-react'
 
 interface EditorPanelProps {
@@ -11,12 +10,12 @@ interface EditorPanelProps {
   isProcessing: boolean
 }
 
-const STRATEGIES = [
-  { id: 'IG1', label: 'Юмор', desc: 'Focus + Vignette', icon: <Wand2 size={18} /> },
-  { id: 'IG2', label: 'POV', desc: 'Dynamic + Saturation', icon: <Zap size={18} /> },
-  { id: 'IG3', label: 'Кликбейт', desc: 'High Contrast', icon: <Activity size={18} /> },
-  { id: 'IG4', label: 'ASMR', desc: 'Cinema + Grain', icon: <Layers size={18} /> }
-] as const
+const STRATEGY_ICONS: Record<StrategyType, JSX.Element> = {
+  IG1: <Wand2 size={18} />,
+  IG2: <Zap size={18} />,
+  IG3: <Activity size={18} />,
+  IG4: <Layers size={18} />
+}
 
 export const EditorPanel = ({
   file,
@@ -42,11 +41,9 @@ export const EditorPanel = ({
               </Chip>
             </div>
           </div>
-          <Button
-            isIconOnly
-            size="sm"
-            {...({ children: <Play size={16} fill="currentColor" /> } as any)}
-          />
+          <Button isIconOnly size="sm">
+            <Play size={16} fill="currentColor" />
+          </Button>
         </div>
       </div>
 
@@ -58,14 +55,14 @@ export const EditorPanel = ({
             4 версии обработки
           </label>
           <div className="grid grid-cols-2 gap-4">
-            {STRATEGIES.map((strat) => {
+            {STRATEGY_META.map((strat) => {
               const strategyState = file.strategies[strat.id]
               return (
                 <Card key={strat.id} className="bg-default-100/10 border border-white/5 shadow-sm">
                   <div className="p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        {strat.icon}
+                        {STRATEGY_ICONS[strat.id]}
                         {strat.id}: {strat.label}
                       </div>
                       <Chip
@@ -78,7 +75,7 @@ export const EditorPanel = ({
                     <p className="text-xs text-default-400">{strat.desc}</p>
                     {strategyState.textData && (
                       <p className="text-xs text-default-300 line-clamp-2">
-                        “{strategyState.textData}”
+                        "{strategyState.textData}"
                       </p>
                     )}
                     <Button
@@ -86,8 +83,9 @@ export const EditorPanel = ({
                       variant="primary"
                       onPress={() => onOpenEditor(strat.id)}
                       isDisabled={isProcessing}
-                      {...({ children: 'Настроить' } as any)}
-                    />
+                    >
+                      Настроить
+                    </Button>
                   </div>
                 </Card>
               )
