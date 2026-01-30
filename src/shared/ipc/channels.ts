@@ -6,7 +6,12 @@ export const IPC = {
   ExtractFrame: 'ffmpeg:extractFrame',
   SaveOverlay: 'overlay:saveOverlay',
   RenderStrategy: 'ffmpeg:renderStrategy',
-  FfmpegLog: 'ffmpeg:log'
+  FfmpegLog: 'ffmpeg:log',
+
+  ProcessingStart: 'processing:start',
+  ProcessingStop: 'processing:stop',
+  ProcessingOnProgress: 'processing:onProgress',
+  ProcessingOnComplete: 'processing:onComplete'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

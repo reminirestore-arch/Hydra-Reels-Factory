@@ -2,18 +2,12 @@ import { create } from 'zustand'
 import { apiClient } from '@api/apiClient'
 import { useFilesStore } from '@features/files/model/filesStore'
 import type { StrategyType, VideoStrategy } from '@shared/types'
-import type { FfmpegLogEvent } from '@shared/ipc/contracts'
-import { getRendererConfig } from '@shared/config/renderer'
-import { retry } from '@shared/utils/retry'
-
-const config = getRendererConfig()
-
-// Dynamic import for p-limit (ESM only)
-// p-limit v7 is ESM-only, use dynamic import
-const getPLimit = async (): Promise<typeof import('p-limit').default> => {
-  const { default: pLimit } = await import('p-limit')
-  return pLimit
-}
+import type {
+  FfmpegLogEvent,
+  ProcessingTask,
+  ProcessingProgressEvent,
+  ProcessingCompleteEvent
+} from '@shared/ipc/contracts'
 
 type Progress = { completed: number; total: number }
 
@@ -32,7 +26,7 @@ type ProcessingState = {
   maxLogs: number
 
   actions: {
-    renderAll: () => Promise<void>
+    startProcessing: () => Promise<void>
     stop: () => void
     reset: () => void
     setFileStatus: (fileId: string, status: FileProcessingStatus) => void
@@ -47,6 +41,30 @@ const getOutputName = (filename: string, strategy: StrategyType): string => {
   return `${base}_${strategy}.mp4`
 }
 
+function buildTasks(
+  files: Array<{ id: string; filename: string; fullPath: string; strategies: Record<StrategyType, VideoStrategy> }>
+): ProcessingTask[] {
+  const tasks: ProcessingTask[] = []
+  for (const file of files) {
+    const strategies = Object.values(file.strategies)
+    for (const s of strategies) {
+      tasks.push({
+        inputPath: file.fullPath,
+        outputName: getOutputName(file.filename, s.id),
+        strategyId: s.id,
+        overlayPath: s.overlayPath,
+        overlayStart: s.overlaySettings.timing.startTime,
+        overlayDuration: s.overlaySettings.timing.duration,
+        overlayFadeOutDuration: s.overlaySettings.timing.fadeOutDuration,
+        profileSettings: s.profileSettings,
+        fileId: file.id,
+        filename: file.filename
+      })
+    }
+  }
+  return tasks
+}
+
 export const useProcessingStore = create<ProcessingState>((set, get) => ({
   isRendering: false,
   lastResult: null,
@@ -57,7 +75,7 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
   statusByFileId: {},
 
   logs: [],
-  maxLogs: 600, // Default, can be configured via IPC if needed
+  maxLogs: 600,
 
   actions: {
     reset: () =>
@@ -86,9 +104,12 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         statusByFileId: { ...s.statusByFileId, [fileId]: status }
       })),
 
-    stop: () => set({ stopRequested: true }),
+    stop: () => {
+      set({ stopRequested: true })
+      void apiClient.processingStop()
+    },
 
-    renderAll: async () => {
+    startProcessing: async () => {
       const { files, outputDir } = useFilesStore.getState()
 
       if (!outputDir) {
@@ -100,7 +121,20 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         return
       }
 
-      const total = files.reduce((acc, file) => acc + Object.values(file.strategies).length, 0)
+      const tasks = buildTasks(files)
+      const total = tasks.length
+
+      const totalPerFile = new Map<string, number>()
+      for (const file of files) {
+        totalPerFile.set(file.id, Object.values(file.strategies).length)
+      }
+      const fileProgress = new Map<
+        string,
+        { total: number; completed: number; hasError: boolean }
+      >()
+      for (const [fid, t] of totalPerFile) {
+        fileProgress.set(fid, { total: t, completed: 0, hasError: false })
+      }
 
       set({
         isRendering: true,
@@ -110,90 +144,52 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
         stopRequested: false
       })
 
-      // subscribe to ffmpeg logs
-      const unsubscribe = apiClient.onFfmpegLog((e) => get().actions.pushLog(e))
-
-      let completed = 0
-
-      try {
-        // Initialize p-limit for parallel processing
-        const pLimit = await getPLimit()
-        const limit = pLimit(config.ffmpeg.maxConcurrent)
-
-        // Track completed strategies per file
-        const fileProgress = new Map<string, number>()
-
-        // Create all render tasks
-        const tasks: Array<() => Promise<void>> = []
-
-        for (const file of files) {
-          const strategies: VideoStrategy[] = Object.values(file.strategies)
-          fileProgress.set(file.id, 0)
-
-          for (const strategy of strategies) {
-            tasks.push(async () => {
-              if (get().stopRequested) return
-
-              // Set file status to processing when starting first strategy
-              const currentStatus = get().statusByFileId[file.id]
-              if (currentStatus !== 'processing' && currentStatus !== 'done') {
-                get().actions.setFileStatus(file.id, 'processing')
-              }
-
-              try {
-                const ok = await retry(
-                  () =>
-                    apiClient.renderStrategy({
-                      inputPath: file.fullPath,
-                      outputDir,
-                      outputName: getOutputName(file.filename, strategy.id),
-                      overlayPath: strategy.overlayPath,
-                      overlayStart: strategy.overlaySettings.timing.startTime,
-                      overlayDuration: strategy.overlaySettings.timing.duration,
-                      overlayFadeOutDuration: strategy.overlaySettings.timing.fadeOutDuration,
-                      strategyId: strategy.id,
-                      profileSettings: strategy.profileSettings,
-                      fileId: file.id,
-                      filename: file.filename
-                    }),
-                  {
-                    maxAttempts: config.processing.retryAttempts
-                  }
+      const unsubProgress = apiClient.onProcessingProgress((e: ProcessingProgressEvent) => {
+        set({ progress: { completed: e.completed, total: e.total } })
+        if (e.fileId) {
+          const cur = fileProgress.get(e.fileId)
+          if (cur) {
+            if (e.status === 'started') {
+              get().actions.setFileStatus(e.fileId, 'processing')
+            } else if (e.status === 'done' || e.status === 'error') {
+              cur.completed += 1
+              if (e.status === 'error') cur.hasError = true
+              if (cur.completed >= cur.total) {
+                get().actions.setFileStatus(
+                  e.fileId,
+                  cur.hasError ? 'error' : 'done'
                 )
-
-                if (!ok) throw new Error('Render failed')
-
-                completed += 1
-                set({ progress: { completed, total } })
-
-                // Update file progress
-                const currentFileProgress = (fileProgress.get(file.id) ?? 0) + 1
-                fileProgress.set(file.id, currentFileProgress)
-
-                // Check if all strategies for this file are done
-                const strategiesCount = strategies.length
-                if (currentFileProgress >= strategiesCount) {
-                  get().actions.setFileStatus(file.id, get().stopRequested ? 'idle' : 'done')
-                }
-              } catch (e) {
-                console.error('Render strategy failed:', file.filename, strategy.id, e)
-                get().actions.setFileStatus(file.id, 'error')
-                // Still increment progress to avoid blocking
-                completed += 1
-                set({ progress: { completed, total } })
               }
-            })
+            }
           }
         }
+      })
 
-        // Execute all tasks in parallel (limited by maxConcurrent)
-        await Promise.all(tasks.map((task) => limit(task)))
+      const unsubComplete = apiClient.onProcessingComplete((e: ProcessingCompleteEvent) => {
+        set({
+          isRendering: false,
+          lastResult: !e.stopped,
+          stopRequested: false
+        })
+        unsubProgress()
+        unsubComplete()
+        unsubLog()
+      })
 
-        set({ isRendering: false, lastResult: !get().stopRequested })
-      } catch (e) {
-        set({ isRendering: false, error: String(e), lastResult: false })
-      } finally {
-        unsubscribe()
+      const unsubLog = apiClient.onFfmpegLog((ev) => get().actions.pushLog(ev))
+
+      try {
+        await apiClient.processingStart({ outputDir, tasks })
+      } catch (err) {
+        set({
+          isRendering: false,
+          error: String(err),
+          lastResult: false,
+          stopRequested: false
+        })
+        unsubProgress()
+        unsubComplete()
+        unsubLog()
       }
     }
   }

@@ -62,6 +62,40 @@ export type FfmpegLogEvent = {
   strategyId?: StrategyType
 }
 
+export type ProcessingTask = {
+  inputPath: string
+  outputName: string
+  strategyId: StrategyType
+  overlayPath?: string
+  overlayStart?: number
+  overlayDuration?: number
+  overlayFadeOutDuration?: number
+  profileSettings?: import('@shared/types').StrategyProfileSettings
+  fileId?: string
+  filename?: string
+}
+
+export type ProcessingStartPayload = {
+  outputDir: string
+  tasks: ProcessingTask[]
+}
+
+export type ProcessingProgressEvent = {
+  fileId?: string
+  filename?: string
+  strategyId?: StrategyType
+  status: 'started' | 'done' | 'error'
+  completed: number
+  total: number
+  percent?: number
+}
+
+export type ProcessingCompleteEvent = {
+  completed: number
+  total: number
+  stopped: boolean
+}
+
 export type Unsubscribe = () => void
 
 export type Api = {
@@ -79,4 +113,9 @@ export type Api = {
 
   // event subscription (renderer only)
   onFfmpegLog?: (handler: (e: FfmpegLogEvent) => void) => Unsubscribe
+
+  processingStart: (payload: ProcessingStartPayload) => Promise<Result<void>>
+  processingStop: () => Promise<Result<void>>
+  onProcessingProgress?: (handler: (e: ProcessingProgressEvent) => void) => Unsubscribe
+  onProcessingComplete?: (handler: (e: ProcessingCompleteEvent) => void) => Unsubscribe
 }

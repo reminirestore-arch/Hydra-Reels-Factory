@@ -1,8 +1,8 @@
 import type { JSX } from 'react'
-import { Button, Card, Chip, ScrollShadow } from '@heroui/react'
+import { Button, Card, Chip, ScrollShadow, Separator } from '@heroui/react'
 import { VideoFile, StrategyType } from '@shared/types'
 import { STRATEGY_META } from '@shared/config/strategies'
-import { Wand2, Zap, Activity, Layers, Play } from 'lucide-react'
+import { Wand2, Zap, Activity, Layers } from 'lucide-react'
 
 interface EditorPanelProps {
   file: VideoFile
@@ -26,7 +26,7 @@ export const EditorPanel = ({
     <div className="flex flex-col h-full bg-black/90 relative border-l border-white/5">
       <div className="absolute inset-0 z-0 opacity-5 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.15),transparent)]" />
 
-      <div className="z-10 p-6 pb-2 shrink-0">
+      {/* <div className="z-10 p-6 pb-2 shrink-0">
         <div className="flex justify-between items-start">
           <div className="overflow-hidden">
             <h2 className="text-xl font-bold text-foreground truncate" title={file.filename}>
@@ -45,9 +45,9 @@ export const EditorPanel = ({
             <Play size={16} fill="currentColor" />
           </Button>
         </div>
-      </div>
+      </div> */}
 
-      <div className="w-full h-px bg-white/10 my-4" />
+      <Separator className="my-4" />
 
       <ScrollShadow className="flex-1 px-6 z-10 space-y-8 pb-24">
         <div>
@@ -75,7 +75,7 @@ export const EditorPanel = ({
                     <p className="text-xs text-default-400">{strat.desc}</p>
                     {strategyState.textData && (
                       <p className="text-xs text-default-300 line-clamp-2">
-                        "{strategyState.textData}"
+                        {strategyState.textData}
                       </p>
                     )}
                     <Button

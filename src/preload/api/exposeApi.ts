@@ -10,7 +10,10 @@ import type {
   SaveOverlayResult,
   RenderStrategyResult,
   ExtractFrameResult,
-  RenderStrategyPayload
+  RenderStrategyPayload,
+  ProcessingStartPayload,
+  ProcessingProgressEvent,
+  ProcessingCompleteEvent
 } from '@shared/ipc/contracts'
 import type { StrategyType } from '@shared/types'
 
@@ -43,6 +46,22 @@ const api: Api = {
     const listener = (_event: unknown, payload: FfmpegLogEvent): void => handler(payload)
     ipcRenderer.on(IPC.FfmpegLog, listener)
     return () => ipcRenderer.removeListener(IPC.FfmpegLog, listener)
+  },
+
+  processingStart: (payload: ProcessingStartPayload): Promise<Result<void>> =>
+    ipcRenderer.invoke(IPC.ProcessingStart, payload) as Promise<Result<void>>,
+  processingStop: (): Promise<Result<void>> =>
+    ipcRenderer.invoke(IPC.ProcessingStop) as Promise<Result<void>>,
+
+  onProcessingProgress: (handler): (() => void) => {
+    const listener = (_event: unknown, payload: ProcessingProgressEvent): void => handler(payload)
+    ipcRenderer.on(IPC.ProcessingOnProgress, listener)
+    return () => ipcRenderer.removeListener(IPC.ProcessingOnProgress, listener)
+  },
+  onProcessingComplete: (handler): (() => void) => {
+    const listener = (_event: unknown, payload: ProcessingCompleteEvent): void => handler(payload)
+    ipcRenderer.on(IPC.ProcessingOnComplete, listener)
+    return () => ipcRenderer.removeListener(IPC.ProcessingOnComplete, listener)
   }
 }
 

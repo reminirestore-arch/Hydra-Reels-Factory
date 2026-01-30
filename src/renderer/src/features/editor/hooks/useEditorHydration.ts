@@ -602,7 +602,7 @@ export const useEditorHydration = ({
       })
 
       // Исключаем лишнее из JSON
-      const canvasState = cloneCanvasState(canvasToJSON(canvas, ['data', 'id', 'role']))
+      const canvasState = cloneCanvasState(canvasToJSON(canvas))
       
       // ВАЖНО: Проверяем, что savedWidth действительно сохранился в JSON
       const stateCheck = canvasState as { objects?: Array<Record<string, unknown>> }

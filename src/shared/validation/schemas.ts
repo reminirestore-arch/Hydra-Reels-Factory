@@ -104,6 +104,24 @@ export const ScanFolderArgsSchema = z.object({
   path: z.string().min(1)
 })
 
+export const ProcessingTaskSchema = z.object({
+  inputPath: z.string().min(1),
+  outputName: z.string().min(1).max(500),
+  strategyId: StrategyTypeSchema,
+  overlayPath: z.string().optional(),
+  overlayStart: z.number().min(0).optional(),
+  overlayDuration: z.number().min(0.1).optional(),
+  overlayFadeOutDuration: z.number().min(0).max(5000).optional(),
+  profileSettings: StrategyProfileSettingsSchema.optional(),
+  fileId: z.string().uuid().optional(),
+  filename: z.string().max(500).optional()
+})
+
+export const ProcessingStartPayloadSchema = z.object({
+  outputDir: z.string().min(1),
+  tasks: z.array(ProcessingTaskSchema).min(1)
+})
+
 // Validation helpers
 export function validateAndParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
   return schema.parse(data)

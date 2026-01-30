@@ -3,9 +3,14 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@features/editor/utils/fabricHelper
 
 interface CanvasContainerProps {
   hostRef: RefObject<HTMLDivElement | null>
+  /** Called after container dimensions change (e.g. when sidebar toggles). Use to trigger fabric.requestRenderAll(). */
+  onContainerResize?: () => void
 }
 
-export const CanvasContainer = ({ hostRef }: CanvasContainerProps): JSX.Element => {
+export const CanvasContainer = ({
+  hostRef,
+  onContainerResize
+}: CanvasContainerProps): JSX.Element => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null)
 
@@ -32,6 +37,7 @@ export const CanvasContainer = ({ hostRef }: CanvasContainerProps): JSX.Element 
       }
 
       setDimensions({ width: canvasWidth, height: canvasHeight })
+      onContainerResize?.()
     }
 
     updateDimensions()
@@ -42,7 +48,7 @@ export const CanvasContainer = ({ hostRef }: CanvasContainerProps): JSX.Element 
     return () => {
       resizeObserver.disconnect()
     }
-  }, [])
+  }, [onContainerResize])
 
   return (
     <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-gray-900 to-black">

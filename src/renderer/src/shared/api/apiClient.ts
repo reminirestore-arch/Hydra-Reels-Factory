@@ -2,7 +2,10 @@ import type {
   Result,
   FfmpegLogEvent,
   RenderStrategyPayload,
-  ScanFolderResult
+  ScanFolderResult,
+  ProcessingStartPayload,
+  ProcessingProgressEvent,
+  ProcessingCompleteEvent
 } from '@shared/ipc/contracts'
 import type { StrategyType } from '@shared/types'
 
@@ -47,6 +50,21 @@ export const apiClient = {
   onFfmpegLog: (handler: (e: FfmpegLogEvent) => void) => {
     if (!window.api.onFfmpegLog) return () => {}
     return window.api.onFfmpegLog(handler)
+  },
+
+  processingStart: async (payload: ProcessingStartPayload): Promise<void> => {
+    unwrap(await window.api.processingStart(payload))
+  },
+  processingStop: async (): Promise<void> => {
+    unwrap(await window.api.processingStop())
+  },
+  onProcessingProgress: (handler: (e: ProcessingProgressEvent) => void) => {
+    if (!window.api.onProcessingProgress) return () => {}
+    return window.api.onProcessingProgress(handler)
+  },
+  onProcessingComplete: (handler: (e: ProcessingCompleteEvent) => void) => {
+    if (!window.api.onProcessingComplete) return () => {}
+    return window.api.onProcessingComplete(handler)
   }
 } satisfies {
   selectFolder: () => Promise<string | null>
@@ -61,4 +79,8 @@ export const apiClient = {
   saveOverlay: (dataUrl: string) => Promise<string>
   renderStrategy: (payload: RenderStrategyPayload) => Promise<boolean>
   onFfmpegLog: (h: (e: FfmpegLogEvent) => void) => () => void
+  processingStart: (payload: ProcessingStartPayload) => Promise<void>
+  processingStop: () => Promise<void>
+  onProcessingProgress: (h: (e: ProcessingProgressEvent) => void) => () => void
+  onProcessingComplete: (h: (e: ProcessingCompleteEvent) => void) => () => void
 }

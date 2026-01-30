@@ -1,5 +1,4 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
-import { join as pathJoin } from 'node:path'
 import { IPC } from '@shared/ipc/channels'
 import type {
   ExtractFrameArgs,
@@ -17,10 +16,10 @@ import {
 } from '@shared/validation/schemas'
 import { pathValidator } from '@shared/security/pathValidation'
 import { createLogger } from '@shared/logger'
+import { extractFrameAsDataUrl } from '@services/ffmpeg'
+import { runRenderTask } from '@services/ffmpeg/runRenderTask'
 
 const logger = createLogger('FFmpegHandler')
-
-import { extractFrameAsDataUrl, renderStrategyVideo } from '@services/ffmpeg'
 
 async function extractFrameImpl(args: ExtractFrameArgs): Promise<ExtractFrameResult> {
   const { path: inputPath, strategyId, atSeconds, profileSettings } = args
@@ -55,71 +54,10 @@ async function renderStrategyImpl(
   event: IpcMainInvokeEvent,
   payload: RenderStrategyPayload
 ): Promise<RenderStrategyResult> {
-  // Validate and sanitize paths
-  const inputPathValidation = pathValidator.validatePath(payload.inputPath)
-  if (!inputPathValidation.valid) {
-    logger.error('Invalid input path', undefined, {
-      path: payload.inputPath,
-      error: inputPathValidation.error
-    })
-    throw new Error(inputPathValidation.error)
+  const sendLog = (e: FfmpegLogEvent): void => {
+    event.sender.send(IPC.FfmpegLog, e)
   }
-
-  const outputDirValidation = pathValidator.validatePath(payload.outputDir)
-  if (!outputDirValidation.valid) {
-    logger.error('Invalid output directory', undefined, {
-      path: payload.outputDir,
-      error: outputDirValidation.error
-    })
-    throw new Error(outputDirValidation.error)
-  }
-
-  const sanitizedOutputName = pathValidator.sanitizeFilename(payload.outputName)
-  const outputName = sanitizedOutputName.endsWith('.mp4')
-    ? sanitizedOutputName
-    : `${sanitizedOutputName}.mp4`
-  const outputPath = pathJoin(outputDirValidation.sanitized!, outputName)
-
-  logger.info('Rendering strategy', {
-    inputPath: inputPathValidation.sanitized,
-    outputPath,
-    strategyId: payload.strategyId
-  })
-
-  const sendLog = (level: FfmpegLogEvent['level'], line: string): void => {
-    event.sender.send(IPC.FfmpegLog, {
-      ts: Date.now(),
-      level,
-      line,
-      fileId: payload.fileId,
-      filename: payload.filename,
-      strategyId: payload.strategyId
-    } satisfies FfmpegLogEvent)
-  }
-
-  try {
-    await renderStrategyVideo({
-      inputPath: inputPathValidation.sanitized!,
-      outputPath,
-      overlayPath: payload.overlayPath
-        ? pathValidator.validatePath(payload.overlayPath).sanitized
-        : undefined,
-      overlayStart: payload.overlayStart,
-      overlayDuration: payload.overlayDuration,
-      overlayFadeOutDuration: payload.overlayFadeOutDuration,
-      strategyId: payload.strategyId,
-      profileSettings: payload.profileSettings,
-      onLog: (line) => sendLog('stderr', line),
-      onProgress: (p) => sendLog('progress', p)
-    })
-    logger.info('Render completed successfully', { outputPath })
-    return true
-  } catch (e) {
-    const error = e instanceof Error ? e : new Error(String(e))
-    logger.error('Render failed', error, { outputPath })
-    sendLog('info', `Render failed: ${error.message}`)
-    return false
-  }
+  return runRenderTask(payload, sendLog)
 }
 
 export function registerFfmpegHandlers(ipcMain: IpcMain): void {

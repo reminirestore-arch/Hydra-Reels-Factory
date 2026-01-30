@@ -50,7 +50,7 @@ export const sanitizeCanvasObjects = (canvas: fabric.Canvas): void => {
   }
 }
 
-export const canvasToJSON = (canvas: fabric.Canvas, _extraProps: string[] = []): object => {
+export const canvasToJSON = (canvas: fabric.Canvas): object => {
   sanitizeCanvasObjects(canvas)
   // ВАЖНО: Благодаря FabricObject.customProperties = ['data'], свойство data
   // теперь автоматически включается в сериализацию при toJSON(undefined)
