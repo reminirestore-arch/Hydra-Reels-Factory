@@ -30,6 +30,8 @@ export function Dashboard(): JSX.Element {
 
       const overlayPath = await apiClient.saveOverlay(payload.overlayDataUrl)
 
+      // Persist overlay into selectedFile.strategies[activeStrategy]; EditorWorkspaceProvider
+      // is keyed by fileId+activeStrategy so this always matches the current tab.
       const next: VideoFile = {
         ...selectedFile,
         strategies: {
@@ -92,8 +94,10 @@ export function Dashboard(): JSX.Element {
             {activeStrategy ? (
               <div className="flex flex-1 min-h-0 min-w-0">
                 <EditorWorkspaceProvider
+                  key={selectedFile.id + activeStrategy}
                   filePath={selectedFile.fullPath}
                   strategyId={activeStrategy}
+                  videoDuration={selectedFile.duration}
                   initialState={activeStrategyData?.canvasState}
                   initialOverlaySettings={activeStrategyData?.overlaySettings}
                   initialProfileSettings={activeStrategyData?.profileSettings}

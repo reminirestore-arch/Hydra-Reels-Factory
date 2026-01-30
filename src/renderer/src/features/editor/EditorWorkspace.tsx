@@ -24,6 +24,7 @@ import type { EditorInspectorProps } from './components/EditorInspector'
 export interface EditorWorkspaceProviderProps {
   filePath: string
   strategyId: StrategyType
+  videoDuration?: number
   initialState?: object
   initialOverlaySettings?: OverlaySettings
   initialProfileSettings?: StrategyProfileSettings
@@ -35,6 +36,7 @@ interface EditorWorkspaceContextValue {
   hostRef: React.RefObject<HTMLDivElement | null>
   fabricRef: { current: fabric.Canvas | null }
   strategyId: StrategyType
+  videoDuration?: number
   overlaySettings: OverlaySettings
   setOverlaySettings: React.Dispatch<React.SetStateAction<OverlaySettings>>
   profileSettings: StrategyProfileSettings
@@ -57,6 +59,7 @@ function useEditorWorkspace(): EditorWorkspaceContextValue {
 export function EditorWorkspaceProvider({
   filePath,
   strategyId,
+  videoDuration,
   initialState,
   initialOverlaySettings,
   initialProfileSettings,
@@ -83,7 +86,8 @@ export function EditorWorkspaceProvider({
     canvasInstance,
     overlaySettings,
     setOverlaySettings,
-    initialState
+    initialState,
+    videoDuration
   })
 
   useEffect(() => {
@@ -123,6 +127,7 @@ export function EditorWorkspaceProvider({
       hostRef,
       fabricRef,
       strategyId,
+      videoDuration,
       overlaySettings,
       setOverlaySettings,
       profileSettings,
@@ -135,6 +140,7 @@ export function EditorWorkspaceProvider({
       hostRef,
       fabricRef,
       strategyId,
+      videoDuration,
       overlaySettings,
       profileSettings,
       logic,
@@ -158,7 +164,7 @@ export function EditorWorkspaceProvider({
 }
 
 export function EditorWorkspaceCenter(): React.JSX.Element {
-  const { hostRef, fabricRef, logic, hydration, handleClose } = useEditorWorkspace()
+  const { hostRef, fabricRef, hydration } = useEditorWorkspace()
 
   const onContainerResize = useCallback(() => {
     fabricRef.current?.requestRenderAll()
@@ -166,13 +172,7 @@ export function EditorWorkspaceCenter(): React.JSX.Element {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-black/95">
-      <EditorToolbar
-        onAddText={logic.addText}
-        onDuplicateOverlay={logic.duplicateOverlayBlock}
-        hasOverlaySelected={logic.selectedBlockId != null}
-        onSave={hydration.handleSave}
-        onClose={handleClose}
-      />
+      <EditorToolbar onSave={hydration.handleSave} />
       <div className="flex-1 min-h-0 flex flex-col">
         <CanvasContainer hostRef={hostRef} onContainerResize={onContainerResize} />
       </div>
@@ -181,7 +181,7 @@ export function EditorWorkspaceCenter(): React.JSX.Element {
 }
 
 export function EditorWorkspaceInspector(): React.JSX.Element {
-  const { fabricRef, strategyId, overlaySettings, setOverlaySettings, profileSettings, setProfileSettings, logic } =
+  const { fabricRef, strategyId, videoDuration, overlaySettings, setOverlaySettings, profileSettings, setProfileSettings, logic } =
     useEditorWorkspace()
 
   const currentVerticalAlign = useMemo(() => {
@@ -215,9 +215,15 @@ export function EditorWorkspaceInspector(): React.JSX.Element {
         selectedBlockId: logic.selectedBlockId,
         fabricRef,
         getOverlayBlock: logic.getOverlayBlock,
-        onRemoveBlock: logic.removeOverlayBlock
+        onRemoveBlock: logic.removeOverlayBlock,
+        onAddText: logic.addText,
+        onDuplicateOverlay: logic.duplicateOverlayBlock,
+        hasOverlaySelected: logic.selectedBlockId != null,
+        videoDuration
       },
       settings: {
+        hasElementSelected: logic.selectedBlockId != null,
+        videoDuration,
         overlaySettings,
         setOverlaySettings,
         profileSettings,
@@ -230,12 +236,14 @@ export function EditorWorkspaceInspector(): React.JSX.Element {
         onCenterText: logic.handleCenterText,
         onCenterBackground: logic.handleCenterBackground,
         updateCanvasText,
-        onTestFadeOut: () => logic.animateFadeOutBlock()
+        onTestFadeOut: () => logic.animateFadeOutBlock(),
+        onTestFadeIn: () => logic.animateFadeInBlock()
       }
     }),
     [
       logic,
       fabricRef,
+      videoDuration,
       overlaySettings,
       setOverlaySettings,
       profileSettings,

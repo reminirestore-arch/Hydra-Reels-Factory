@@ -28,6 +28,7 @@ function toRenderPayload(outputDir: string, task: ProcessingTask): RenderStrateg
     overlayStart: task.overlayStart,
     overlayDuration: task.overlayDuration,
     overlayFadeOutDuration: task.overlayFadeOutDuration,
+    overlayFadeInDuration: task.overlayFadeInDuration,
     profileSettings: task.profileSettings,
     fileId: task.fileId,
     filename: task.filename

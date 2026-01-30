@@ -170,6 +170,77 @@ export const animateFadeOut = (
 }
 
 /**
+ * Анимирует плавное появление OverlayBlock (текст + подложка)
+ * @param block - блок для анимации
+ * @param fadeInDuration - длительность появления в миллисекундах
+ * @param onComplete - колбэк, вызываемый после завершения анимации
+ */
+export const animateFadeIn = (
+  block: OverlayBlock,
+  fadeInDuration: number,
+  onComplete?: () => void
+): void => {
+  if (!block.background || !block.text || fadeInDuration <= 0) {
+    onComplete?.()
+    return
+  }
+
+  const canvas = block.background.canvas || block.text.canvas
+  if (!canvas) return
+
+  const endOpacityBg = block.background.opacity ?? 1
+  const endOpacityText = block.text.opacity ?? 1
+
+  block.background.set({ opacity: 0 })
+  block.text.set({ opacity: 0 })
+  canvas.requestRenderAll()
+
+  const animations: Promise<void>[] = []
+
+  animations.push(
+    new Promise<void>((resolve) => {
+      try {
+        fabric.util.animate({
+          startValue: 0,
+          endValue: endOpacityBg,
+          duration: fadeInDuration,
+          onChange: (value: number) => {
+            block.background.set('opacity', value)
+            if (canvas) canvas.requestRenderAll()
+          },
+          onComplete: () => resolve()
+        })
+      } catch (error) {
+        console.warn('Error animating background fade in:', error)
+        resolve()
+      }
+    })
+  )
+
+  animations.push(
+    new Promise<void>((resolve) => {
+      try {
+        fabric.util.animate({
+          startValue: 0,
+          endValue: endOpacityText,
+          duration: fadeInDuration,
+          onChange: (value: number) => {
+            block.text.set('opacity', value)
+            if (canvas) canvas.requestRenderAll()
+          },
+          onComplete: () => resolve()
+        })
+      } catch (error) {
+        console.warn('Error animating text fade in:', error)
+        resolve()
+      }
+    })
+  )
+
+  Promise.all(animations).then(() => onComplete?.())
+}
+
+/**
  * Восстанавливает прозрачность OverlayBlock (текст + подложка) до исходных значений
  * @param block - блок для восстановления
  * @param backgroundOpacity - исходная прозрачность фона
@@ -194,7 +265,8 @@ export const mergeOverlaySettings = (incoming?: OverlaySettings): OverlaySetting
     timing: {
       ...d.timing,
       ...(incoming?.timing ?? {}),
-      fadeOutDuration: incoming?.timing?.fadeOutDuration ?? d.timing.fadeOutDuration ?? 500
+      fadeOutDuration: incoming?.timing?.fadeOutDuration ?? d.timing.fadeOutDuration ?? 500,
+      fadeInDuration: incoming?.timing?.fadeInDuration ?? d.timing.fadeInDuration ?? 500
     },
     text: {
       ...d.text,

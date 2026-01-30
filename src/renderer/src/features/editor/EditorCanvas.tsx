@@ -21,7 +21,6 @@ interface EditorCanvasProps {
   initialOverlaySettings?: OverlaySettings
   initialProfileSettings?: StrategyProfileSettings
   onSave: (payload: OverlaySavePayload) => void
-  onClose: () => void
 }
 
 export const EditorCanvas = ({
@@ -30,8 +29,7 @@ export const EditorCanvas = ({
   initialState,
   initialOverlaySettings,
   initialProfileSettings,
-  onSave,
-  onClose
+  onSave
 }: EditorCanvasProps): React.JSX.Element => {
   // 1. Core State (memoized initial values)
   const initialOverlaySettingsMemo = useMemo(
@@ -74,10 +72,6 @@ export const EditorCanvas = ({
     [onSave]
   )
 
-  const handleClose = useCallback(() => {
-    onClose()
-  }, [onClose])
-
   // 5. Init Hydration
   const hydration = useEditorHydration({
     fabricRef,
@@ -97,13 +91,7 @@ export const EditorCanvas = ({
 
   return (
     <div className="flex flex-col h-full w-full bg-black/95">
-      <EditorToolbar
-        onAddText={logic.addText}
-        onDuplicateOverlay={logic.duplicateOverlayBlock}
-        hasOverlaySelected={logic.selectedBlockId != null}
-        onSave={hydration.handleSave}
-        onClose={handleClose}
-      />
+      <EditorToolbar onSave={hydration.handleSave} />
 
       <div className="flex flex-1 min-h-0">
         <LayersPanel
@@ -113,6 +101,9 @@ export const EditorCanvas = ({
           fabricRef={fabricRef}
           getOverlayBlock={logic.getOverlayBlock}
           onRemoveBlock={logic.removeOverlayBlock}
+          onAddText={logic.addText}
+          onDuplicateOverlay={logic.duplicateOverlayBlock}
+          hasOverlaySelected={logic.selectedBlockId != null}
         />
 
         <CanvasContainer hostRef={hostRef} />
@@ -155,6 +146,9 @@ export const EditorCanvas = ({
           )}
           onTestFadeOut={useCallback(() => {
             logic.animateFadeOutBlock()
+          }, [logic])}
+          onTestFadeIn={useCallback(() => {
+            logic.animateFadeInBlock()
           }, [logic])}
         />
       </div>

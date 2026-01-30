@@ -45,6 +45,7 @@ export type RenderStrategyPayload = {
   overlayStart?: number
   overlayDuration?: number
   overlayFadeOutDuration?: number // длительность исчезновения в миллисекундах
+  overlayFadeInDuration?: number // длительность появления в миллисекундах
   profileSettings?: import('@shared/types').StrategyProfileSettings
 
   // optional context for logs/UI
@@ -70,6 +71,7 @@ export type ProcessingTask = {
   overlayStart?: number
   overlayDuration?: number
   overlayFadeOutDuration?: number
+  overlayFadeInDuration?: number
   profileSettings?: import('@shared/types').StrategyProfileSettings
   fileId?: string
   filename?: string

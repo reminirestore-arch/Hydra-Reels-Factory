@@ -247,6 +247,7 @@ export const renderStrategyVideo = async (options: {
   overlayStart?: number
   overlayDuration?: number
   overlayFadeOutDuration?: number // длительность исчезновения в миллисекундах
+  overlayFadeInDuration?: number // длительность появления в миллисекундах
   strategyId: StrategyType
   profileSettings?: import('@shared/types').StrategyProfileSettings
   onLog?: (line: string) => void
@@ -259,6 +260,7 @@ export const renderStrategyVideo = async (options: {
     overlayStart = 0,
     overlayDuration = 5,
     overlayFadeOutDuration = 0, // по умолчанию без fade out
+    overlayFadeInDuration = 0, // по умолчанию без fade in
     strategyId,
     profileSettings,
     onLog,
@@ -272,7 +274,8 @@ export const renderStrategyVideo = async (options: {
     overlayPath: overlayPath ? 'present' : 'none',
     overlayStart,
     overlayDuration,
-    overlayFadeOutDuration
+    overlayFadeOutDuration,
+    overlayFadeInDuration
   })
 
   const includeAudio = await hasAudioStream(inputPath)
@@ -298,43 +301,47 @@ export const renderStrategyVideo = async (options: {
       if (overlayPath) {
         const overlayEnd = overlayStart + overlayDuration
         const fadeOutDurationSeconds = overlayFadeOutDuration / 1000 // конвертируем мс в секунды
+        const fadeInDurationSeconds = overlayFadeInDuration / 1000
         const fadeOutStart = overlayEnd - fadeOutDurationSeconds
 
+        // -itsoffset: при overlayStart > 0 смещаем таймстемпы overlay, чтобы кадр 0 overlay
+        // соответствовал моменту overlayStart основного видео (иначе overlay не появляется вовремя)
         // Используем -loop 1 для overlay, чтобы он стал видеопотоком и можно было применить fade
-        // Ограничиваем длительность overlay до overlayDuration + fadeOutDurationSeconds, чтобы fade успел завершиться
-        // Время в overlay input идет от 0 до overlayDuration + fadeOutDurationSeconds
-        // В fluent-ffmpeg inputOptions применяется к последнему добавленному input
         const overlayInputDuration =
           overlayFadeOutDuration > 0 && fadeOutStart > overlayStart
             ? overlayDuration + fadeOutDurationSeconds
             : overlayDuration
         command.input(overlayPath)
-        command.inputOptions(['-loop', '1', '-t', String(overlayInputDuration)])
+        const inputOpts: string[] = ['-loop', '1', '-t', String(overlayInputDuration)]
+        if (overlayStart > 0) {
+          inputOpts.unshift('-itsoffset', String(overlayStart))
+        }
+        command.inputOptions(inputOpts)
 
-        // Строим фильтр overlay с плавным исчезновением
-        // Используем фильтр fade с правильным временем относительно overlay input
+        // Строим цепочку overlay: scale2ref -> fade in (опц.) -> fade out (опц.) -> overlay
+        // При -itsoffset overlayStart таймстемпы overlay сдвинуты: кадр 0 overlay имеет t=overlayStart.
+        // fade-фильтр использует t (timestamp кадра), поэтому st для fade in = overlayStart,
+        // st для fade out = overlayStart + overlayDuration.
+        const fadeInSt = overlayStart
+        const fadeOutSt = overlayStart + overlayDuration
+        const overlayEndWithFade = overlayEnd + fadeOutDurationSeconds
+        const hasFadeIn = overlayFadeInDuration > 0
+        const hasFadeOut = overlayFadeOutDuration > 0 && fadeOutStart > overlayStart
+
         let overlayGraph: string
-        if (overlayFadeOutDuration > 0 && fadeOutStart > overlayStart) {
-          // Время начала fade относительно overlay input
-          // overlay input длится overlayDuration + fadeOutDurationSeconds секунд (от 0 до overlayDuration + fadeOutDurationSeconds)
-          // overlay отображается overlayDuration секунд (с overlayStart до overlayEnd в основном видео)
-          // fade должен начаться в конце overlayDuration, т.е. в момент overlayDuration секунд в overlay input
-          // fade длится fadeOutDurationSeconds
-          const fadeOutStartInOverlay = overlayDuration
-          // Важно: overlay должен отображаться до overlayEnd + fadeOutDurationSeconds, чтобы fade успел завершиться
-          const overlayEndWithFade = overlayEnd + fadeOutDurationSeconds
-          // Применяем fade out к overlay: fade начинается в fadeOutStartInOverlay и длится fadeOutDurationSeconds
-          // format=rgba нужен для поддержки альфа-канала
-          // Порядок: сначала обрабатываем оба потока, затем применяем scale2ref, затем fade, затем overlay
+        if (hasFadeIn || hasFadeOut) {
+          const fadeParts: string[] = []
+          if (hasFadeIn) fadeParts.push(`fade=t=in:st=${fadeInSt}:d=${fadeInDurationSeconds}:alpha=1`)
+          if (hasFadeOut) fadeParts.push(`fade=t=out:st=${fadeOutSt}:d=${fadeOutDurationSeconds}:alpha=1`)
+          const fadeFilter = fadeParts.join(',')
           overlayGraph = [
             `[0:v]${videoFilter}[v0]`,
             `[1:v]format=rgba[ov0]`,
             `[ov0][v0]scale2ref=w=iw:h=ih[ov1][v1]`,
-            `[ov1]fade=t=out:st=${fadeOutStartInOverlay}:d=${fadeOutDurationSeconds}:alpha=1[ov]`,
-            `[v1][ov]overlay=0:0:enable='between(t,${overlayStart},${overlayEndWithFade})'[vout]`
+            `[ov1]${fadeFilter}[ov]`,
+            `[v1][ov]overlay=0:0:enable='between(t,${overlayStart},${hasFadeOut ? overlayEndWithFade : overlayEnd})'[vout]`
           ].join(';')
         } else {
-          // Без fade out - простое включение/выключение
           overlayGraph = [
             `[0:v]${videoFilter}[v0]`,
             `[1:v]format=rgba[ov0]`,

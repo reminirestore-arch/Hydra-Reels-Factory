@@ -9,6 +9,7 @@ export const overlaySettingsEqual = (a: OverlaySettings, b: OverlaySettings): bo
     a.timing.startTime === b.timing.startTime &&
     a.timing.duration === b.timing.duration &&
     (a.timing.fadeOutDuration ?? 0) === (b.timing.fadeOutDuration ?? 0) &&
+    (a.timing.fadeInDuration ?? 0) === (b.timing.fadeInDuration ?? 0) &&
     a.text.align === b.text.align &&
     a.text.verticalAlign === b.text.verticalAlign &&
     a.text.contentAlign === b.text.contentAlign &&

@@ -65,6 +65,7 @@ export async function runRenderTask(
       overlayStart: payload.overlayStart,
       overlayDuration: payload.overlayDuration,
       overlayFadeOutDuration: payload.overlayFadeOutDuration,
+      overlayFadeInDuration: payload.overlayFadeInDuration,
       strategyId: payload.strategyId,
       profileSettings: payload.profileSettings,
       onLog: (line) => log('stderr', line),

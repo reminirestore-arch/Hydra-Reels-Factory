@@ -18,9 +18,15 @@ interface LayersPanelProps {
   fabricRef: { current: fabric.Canvas | null }
   getOverlayBlock: (id?: number | null) => OverlayBlock | null
   onRemoveBlock: (blockId: number) => void
+  onAddText: () => void
+  onDuplicateOverlay: () => void
+  hasOverlaySelected: boolean
+  videoDuration?: number
 }
 
 interface SettingsPanelProps {
+  hasElementSelected?: boolean
+  videoDuration?: number
   overlaySettings: OverlaySettings
   setOverlaySettings: Dispatch<SetStateAction<OverlaySettings>>
   profileSettings: StrategyProfileSettings
@@ -37,6 +43,7 @@ interface SettingsPanelProps {
   onCenterBackground: (axis: 'horizontal' | 'vertical') => void
   updateCanvasText: (val: string) => void
   onTestFadeOut?: () => void
+  onTestFadeIn?: () => void
 }
 
 export interface EditorInspectorProps {
@@ -51,7 +58,7 @@ export const EditorInspector = ({
   return (
     <aside className="w-[320px] min-w-[320px] flex flex-col h-full border-l border-white/10 bg-black/60 shrink-0">
       {/* Top ~30%: Layers */}
-      <div className="flex-[0_0_30%] min-h-0 overflow-hidden flex flex-col">
+      <div className="flex-[0_0_30%] shrink-0 min-h-0 overflow-hidden flex flex-col">
         <LayersPanel
             elements={layers.elements}
             selectedRole={layers.selectedRole}
@@ -59,15 +66,21 @@ export const EditorInspector = ({
             fabricRef={layers.fabricRef}
             getOverlayBlock={layers.getOverlayBlock}
             onRemoveBlock={layers.onRemoveBlock}
+            onAddText={layers.onAddText}
+            onDuplicateOverlay={layers.onDuplicateOverlay}
+            hasOverlaySelected={layers.hasOverlaySelected}
+            videoDuration={layers.videoDuration}
           />
       </div>
 
       <Separator className="shrink-0" />
 
       {/* Bottom flex-1: Settings */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <ScrollShadow className="flex-1 h-full">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden min-w-0">
+        <ScrollShadow className="flex-1 min-h-0 h-full overflow-y-auto">
           <SettingsPanel
+            hasElementSelected={settings.hasElementSelected}
+            videoDuration={settings.videoDuration}
             overlaySettings={settings.overlaySettings}
             setOverlaySettings={settings.setOverlaySettings}
             profileSettings={settings.profileSettings}
@@ -81,6 +94,7 @@ export const EditorInspector = ({
             onCenterBackground={settings.onCenterBackground}
             updateCanvasText={settings.updateCanvasText}
             onTestFadeOut={settings.onTestFadeOut}
+            onTestFadeIn={settings.onTestFadeIn}
           />
         </ScrollShadow>
       </div>

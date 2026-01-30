@@ -15,6 +15,7 @@ import {
   getEventTarget,
   mergeOverlaySettings,
   animateFadeOut,
+  animateFadeIn,
   restoreFadeOut
 } from '@features/editor/utils/fabricHelpers'
 import { getBlockId, ensureOverlayIds, ensureRolesOnObjects } from './overlay/overlayCanvasIds'
@@ -31,6 +32,7 @@ import {
   configureTextControls
 } from './overlay/overlayObjectFactories'
 import { deriveOverlaySettingsFromBlock, overlaySettingsEqual } from './overlay/overlaySettings'
+import { defaultOverlayTiming } from '@shared/domain/overlayTiming'
 
 // Локальный тип для ref
 type MutableRef<T> = { current: T }
@@ -57,6 +59,7 @@ interface UseOverlayLogicProps {
   overlaySettings: OverlaySettings
   setOverlaySettings: (s: OverlaySettings) => void
   initialState?: object
+  videoDuration?: number
 }
 
 export const useOverlayLogic = ({
@@ -65,7 +68,8 @@ export const useOverlayLogic = ({
   canvasInstance,
   overlaySettings,
   setOverlaySettings,
-  initialState
+  initialState,
+  videoDuration
 }: UseOverlayLogicProps): {
   selectedBlockId: number | null
   selectedRole: CanvasElementRole | null
@@ -87,6 +91,7 @@ export const useOverlayLogic = ({
   handleCenterBackground: (direction: 'horizontal' | 'vertical') => void
   getOverlayBlock: (id?: number | null) => OverlayBlock | null
   animateFadeOutBlock: (blockId?: number | null) => void
+  animateFadeInBlock: (blockId?: number | null) => void
   setIsHydrating: (value: boolean) => void
 } => {
   const overlayMapRef = useRef<Map<number, OverlayBlock>>(new Map())
@@ -473,27 +478,7 @@ export const useOverlayLogic = ({
 
     rebuildOverlayMap()
 
-    // Handle empty canvas or initial load
-    if (overlayMapRef.current.size === 0) {
-      const hasText = objects.some((o) => o instanceof fabric.Textbox || o instanceof fabric.IText)
-      if (!hasText) {
-        const blockId = nextBlockIdRef.current++
-        // Используем дефолтные настройки для начального блока
-        const defaultSettings = buildDefaultOverlaySettings()
-        const block = createOverlayBlock(
-          blockId,
-          textValueRef.current,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          defaultSettings
-        )
-        overlayMapRef.current.set(blockId, block)
-        applyOverlaySettings()
-        rebuildOverlayMap()
-      }
-    } else if (!selectedBlockIdRef.current) {
+    if (!selectedBlockIdRef.current) {
       const first = Array.from(overlayMapRef.current.values())[0]
       if (first) {
         setSelectedBlockIdIfChanged(first.id)
@@ -548,8 +533,6 @@ export const useOverlayLogic = ({
   }, [
     fabricRef,
     rebuildOverlayMap,
-    createOverlayBlock,
-    applyOverlaySettings,
     getOverlaySettingsFromBlock,
     setOverlaySettingsIfChanged,
     setTextValueIfChanged,
@@ -563,8 +546,12 @@ export const useOverlayLogic = ({
     const canvas = fabricRef.current
     if (!canvas || !isCanvasReadyRef.current) return
     const blockId = nextBlockIdRef.current++
-    // Используем дефолтные настройки для нового блока
-    const defaultSettings = buildDefaultOverlaySettings()
+    const baseSettings = buildDefaultOverlaySettings()
+    const timing = defaultOverlayTiming(videoDuration)
+    const defaultSettings: OverlaySettings = {
+      ...baseSettings,
+      timing: { ...baseSettings.timing, ...timing }
+    }
     const block = createOverlayBlock(
       blockId,
       undefined,
@@ -578,13 +565,13 @@ export const useOverlayLogic = ({
     canvas.setActiveObject(block.text)
     setSelectedRoleIfChanged('overlay-text')
     setSelectedBlockIdIfChanged(blockId)
-    // Обновляем настройки UI на дефолтные для нового блока
     setOverlaySettingsIfChanged(defaultSettings)
     ensureFrameImage()
     rebuildOverlayMap()
   }, [
     fabricRef,
     isCanvasReadyRef,
+    videoDuration,
     createOverlayBlock,
     ensureFrameImage,
     rebuildOverlayMap,
@@ -1018,6 +1005,17 @@ export const useOverlayLogic = ({
     [getOverlayBlock]
   )
 
+  const animateFadeInBlock = useCallback(
+    (blockId?: number | null): void => {
+      const block = getOverlayBlock(blockId ?? selectedBlockIdRef.current)
+      if (!block) return
+
+      const fadeInDuration = overlaySettingsRef.current.timing.fadeInDuration ?? 500
+      animateFadeIn(block, fadeInDuration)
+    },
+    [getOverlayBlock]
+  )
+
   const setIsHydrating = useCallback((value: boolean): void => {
     isHydratingRef.current = value
   }, [])
@@ -1046,6 +1044,7 @@ export const useOverlayLogic = ({
     // Exposed Refs/Helpers if needed
     getOverlayBlock,
     animateFadeOutBlock,
+    animateFadeInBlock,
     setIsHydrating
   }
 }

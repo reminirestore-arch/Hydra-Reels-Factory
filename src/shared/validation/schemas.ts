@@ -6,8 +6,9 @@ export const StrategyStatusSchema = z.enum(['default', 'custom'])
 
 export const OverlayTimingSchema = z.object({
   startTime: z.number().min(0),
-  duration: z.number().min(0.1).max(300),
-  fadeOutDuration: z.number().min(0).max(5000).optional() // в миллисекундах
+  duration: z.number().min(1).max(300), // D_MIN = 1 sec
+  fadeOutDuration: z.number().min(0).max(5000).optional(), // в миллисекундах
+  fadeInDuration: z.number().min(0).max(5000).optional() // в миллисекундах
 })
 
 export const TextStyleSettingsSchema = z.object({
@@ -93,8 +94,9 @@ export const RenderStrategyPayloadSchema = z.object({
   strategyId: StrategyTypeSchema,
   overlayPath: z.string().optional(),
   overlayStart: z.number().min(0).optional(),
-  overlayDuration: z.number().min(0.1).optional(),
+  overlayDuration: z.number().min(1).optional(), // D_MIN = 1 sec
   overlayFadeOutDuration: z.number().min(0).max(5000).optional(), // в миллисекундах
+  overlayFadeInDuration: z.number().min(0).max(5000).optional(), // в миллисекундах
   profileSettings: StrategyProfileSettingsSchema.optional(),
   fileId: z.string().uuid().optional(),
   filename: z.string().max(500).optional()
@@ -110,8 +112,9 @@ export const ProcessingTaskSchema = z.object({
   strategyId: StrategyTypeSchema,
   overlayPath: z.string().optional(),
   overlayStart: z.number().min(0).optional(),
-  overlayDuration: z.number().min(0.1).optional(),
+  overlayDuration: z.number().min(1).optional(), // D_MIN = 1 sec
   overlayFadeOutDuration: z.number().min(0).max(5000).optional(),
+  overlayFadeInDuration: z.number().min(0).max(5000).optional(),
   profileSettings: StrategyProfileSettingsSchema.optional(),
   fileId: z.string().uuid().optional(),
   filename: z.string().max(500).optional()

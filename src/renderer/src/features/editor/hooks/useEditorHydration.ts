@@ -633,6 +633,7 @@ export const useEditorHydration = ({
         .join(' ')
         .trim()
 
+      // Persisted to selectedFile.strategies[activeStrategy] via Dashboard handleSaveOverlay
       onSave({
         canvasState,
         overlayDataUrl,

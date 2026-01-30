@@ -6,6 +6,7 @@ export interface OverlayTiming {
   startTime: number
   duration: number
   fadeOutDuration?: number // длительность плавного исчезновения в миллисекундах
+  fadeInDuration?: number // длительность плавного появления в миллисекундах
 }
 
 export interface TextStyleSettings {
@@ -68,7 +69,7 @@ export interface VideoStrategy {
 }
 
 export const createDefaultOverlaySettings = (): OverlaySettings => ({
-  timing: { startTime: 0, duration: 5, fadeOutDuration: 500 },
+  timing: { startTime: 0, duration: 5, fadeOutDuration: 500, fadeInDuration: 500 },
   text: {
     fontSize: 42,
     color: '#ffffff',

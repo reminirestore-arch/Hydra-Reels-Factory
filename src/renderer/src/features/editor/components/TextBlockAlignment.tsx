@@ -32,8 +32,6 @@ interface TextBlockAlignmentProps {
 }
 
 export const TextBlockAlignment = ({
-  horizontal,
-  vertical,
   onHorizontalChange,
   onVerticalChange,
   horizontalLabels = {
@@ -61,9 +59,8 @@ export const TextBlockAlignment = ({
               key={align}
               isIconOnly={true}
               size="sm"
-              variant={horizontal === align ? 'primary' : 'ghost'}
+              variant={'ghost'}
               onPress={() => onHorizontalChange(align)}
-              className="min-w-9"
               title={horizontalLabels[align]}
               {...({
                 children:
@@ -87,8 +84,9 @@ export const TextBlockAlignment = ({
           {verticalOptions.map((align) => (
             <Button
               key={align}
+              isIconOnly={true}
               size="sm"
-              variant={vertical === align ? 'primary' : 'ghost'}
+              variant={'ghost'}
               onPress={() => onVerticalChange(align)}
               title={verticalLabels[align]}
               {...({

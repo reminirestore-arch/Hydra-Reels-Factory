@@ -8,6 +8,7 @@ import type {
   ProcessingProgressEvent,
   ProcessingCompleteEvent
 } from '@shared/ipc/contracts'
+import { clampTiming } from '@shared/domain/overlayTiming'
 
 type Progress = { completed: number; total: number }
 
@@ -42,20 +43,31 @@ const getOutputName = (filename: string, strategy: StrategyType): string => {
 }
 
 function buildTasks(
-  files: Array<{ id: string; filename: string; fullPath: string; strategies: Record<StrategyType, VideoStrategy> }>
+  files: Array<{
+    id: string
+    filename: string
+    fullPath: string
+    duration?: number
+    strategies: Record<StrategyType, VideoStrategy>
+  }>
 ): ProcessingTask[] {
   const tasks: ProcessingTask[] = []
   for (const file of files) {
     const strategies = Object.values(file.strategies)
     for (const s of strategies) {
+      const timing = clampTiming(file.duration, {
+        startTime: s.overlaySettings.timing.startTime,
+        duration: s.overlaySettings.timing.duration
+      })
       tasks.push({
         inputPath: file.fullPath,
         outputName: getOutputName(file.filename, s.id),
         strategyId: s.id,
         overlayPath: s.overlayPath,
-        overlayStart: s.overlaySettings.timing.startTime,
-        overlayDuration: s.overlaySettings.timing.duration,
+        overlayStart: timing.startTime,
+        overlayDuration: timing.duration,
         overlayFadeOutDuration: s.overlaySettings.timing.fadeOutDuration,
+        overlayFadeInDuration: s.overlaySettings.timing.fadeInDuration,
         profileSettings: s.profileSettings,
         fileId: file.id,
         filename: file.filename
